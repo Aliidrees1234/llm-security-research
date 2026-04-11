@@ -1,0 +1,74 @@
+{
+  "corpus": "claude",
+  "timestamp": "2026-04-06T05:14:20.475180",
+  "iterations": {
+    "K0": {
+      "label": "Baseline (no FDSP)",
+      "High": 11,
+      "Medium": 1,
+      "Low": 6,
+      "Total": 18,
+      "Skipped": 0,
+      "LOC": 1197,
+      "I100L": 1.5,
+      "fixes_applied": {}
+    },
+    "K1": {
+      "label": "After K=1 FDSP iteration",
+      "High": 0,
+      "Medium": 0,
+      "Low": 2,
+      "Total": 2,
+      "Skipped": 2,
+      "LOC": 1207,
+      "I100L": 0.17,
+      "fixes_applied": {
+        "B201": 9,
+        "B311": 1,
+        "B105": 2,
+        "B324": 1,
+        "B602": 1,
+        "B104": 1
+      }
+    },
+    "K2": {
+      "label": "K=2 \u2014 not needed (zero High at K=1)",
+      "High": 0,
+      "Medium": 0,
+      "Low": 2,
+      "Total": 2,
+      "Skipped": 2,
+      "LOC": 1207,
+      "I100L": 0.17,
+      "fixes_applied": {}
+    },
+    "K3": {
+      "label": "K=3 \u2014 not needed (zero High at K=1)",
+      "High": 0,
+      "Medium": 0,
+      "Low": 2,
+      "Total": 2,
+      "Skipped": 2,
+      "LOC": 1207,
+      "I100L": 0.17,
+      "fixes_applied": {}
+    }
+  },
+  "total_fixes": {
+    "B201": 9,
+    "B311": 1,
+    "B105": 2,
+    "B324": 1,
+    "B602": 1,
+    "B104": 1
+  },
+  "summary": {
+    "baseline_high": 11,
+    "final_high": 0,
+    "high_reduction": 11,
+    "baseline_total": 18,
+    "final_total": 2,
+    "baseline_I100L": 1.5,
+    "final_I100L": 0.17
+  }
+}

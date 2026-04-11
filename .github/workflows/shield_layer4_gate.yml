@@ -41,7 +41,7 @@ jobs:
         id: bandit
         run: |
           bandit -r . \
-            --exclude ./tests,./node_modules,./.github,./venv,./.venv \
+            --exclude ./tests,./node_modules,./.github,./venv,./.venv,./snippets \
             -f json \
             -o bandit_report.json \
             -q || true

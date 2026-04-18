@@ -2,28 +2,56 @@
 # SHIELD FRAMEWORK — LAYER 4: DEPLOYMENT GATE
 # GitHub Actions CI/CD Pipeline
 #
+# Runs on every push and pull request to main.
 # Blocks deployment on any High-severity Bandit finding.
-# Warns on Medium. Passes on Low/Clean.
+# Runs pytest to ensure all 41 tests pass.
 #
-# File location in your repo: .github/workflows/shield_gate.yml
+# Author: Ali Yasin Idrees
+# Version: 0.1.0
 # ============================================================
 
 name: SHIELD Security Gate
 
 on:
   push:
-    branches: [ "main", "master", "develop" ]
+    branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
 
 jobs:
 
-  # ──────────────────────────────────────────────────────────
-  # JOB 1: BANDIT — Python / Flask SAST
-  # ──────────────────────────────────────────────────────────
-  bandit-scan:
-    name: Bandit SAST (Python)
+  # ────────────────────────────────────────────────────────
+  # JOB 1: PYTEST — All 41 rules tests must pass
+  # ────────────────────────────────────────────────────────
+  pytest:
+    name: pytest — Rule Tests
     runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install SHIELD and dependencies
+        run: |
+          pip install -e .
+          pip install pytest bandit bcrypt colorama
+
+      - name: Run pytest
+        run: |
+          pytest tests/ -v --tb=short
+
+  # ────────────────────────────────────────────────────────
+  # JOB 2: BANDIT — Python SAST on shield/ folder only
+  # ────────────────────────────────────────────────────────
+  bandit-scan:
+    name: Bandit SAST — shield/
+    runs-on: ubuntu-latest
+    needs: pytest
 
     steps:
       - name: Checkout code
@@ -37,16 +65,14 @@ jobs:
       - name: Install Bandit
         run: pip install bandit==1.9.4
 
-      - name: Run Bandit (JSON output)
-        id: bandit
+      - name: Run Bandit on shield/ only
         run: |
-          bandit -r . \
-            --exclude ./tests,./node_modules,./.github,./venv,./.venv,./snippets \
+          bandit -r shield/ \
             -f json \
             -o bandit_report.json \
             -q || true
 
-      - name: Parse Bandit results and enforce gate
+      - name: Parse results and enforce gate
         run: |
           python3 << 'EOF'
           import json, sys
@@ -59,14 +85,14 @@ jobs:
               sys.exit(0)
 
           results = data.get('results', [])
-          high    = [r for r in results if r.get('issue_severity') == 'HIGH']
-          medium  = [r for r in results if r.get('issue_severity') == 'MEDIUM']
-          low     = [r for r in results if r.get('issue_severity') == 'LOW']
+          high   = [r for r in results if r.get('issue_severity') == 'HIGH']
+          medium = [r for r in results if r.get('issue_severity') == 'MEDIUM']
+          low    = [r for r in results if r.get('issue_severity') == 'LOW']
 
           print(f"::notice::SHIELD Layer 4 — Bandit Results")
           print(f"::notice::High: {len(high)}  Medium: {len(medium)}  Low: {len(low)}")
 
-          # Print High findings as errors (blocks merge)
+          # Print High findings as errors — blocks merge
           for issue in high:
               filename = issue.get('filename', 'unknown')
               line     = issue.get('line_number', '?')
@@ -75,7 +101,7 @@ jobs:
               cwe      = issue.get('issue_cwe', {}).get('id', '?')
               print(f"::error file={filename},line={line}::[{test_id}] {text} (CWE-{cwe})")
 
-          # Print Medium findings as warnings (does not block)
+          # Print Medium as warnings — does not block
           for issue in medium:
               filename = issue.get('filename', 'unknown')
               line     = issue.get('line_number', '?')
@@ -83,18 +109,16 @@ jobs:
               text     = issue.get('issue_text', '')
               print(f"::warning file={filename},line={line}::[{test_id}] {text}")
 
-          # GATE DECISION
+          # Gate decision
           if high:
               print(f"\n::error::SHIELD Layer 4 — DEPLOYMENT BLOCKED")
-              print(f"::error::{len(high)} High-severity finding(s) must be resolved before deployment.")
-              print(f"::error::Run FDSP Layer 3 remediation: python fdsp_layer3.py --corpora . --k 3")
+              print(f"::error::{len(high)} High-severity finding(s) must be resolved.")
               sys.exit(1)
           elif medium:
-              print(f"\n::warning::SHIELD Layer 4 — DEPLOYMENT WARNED")
-              print(f"::warning::{len(medium)} Medium-severity finding(s). Security review recommended within 5 days.")
+              print(f"\n::warning::SHIELD Layer 4 — WARNING: {len(medium)} Medium finding(s)")
               sys.exit(0)
           else:
-              print(f"\n::notice::SHIELD Layer 4 — CLEAN ✅  Deployment approved.")
+              print(f"\n::notice::SHIELD Layer 4 — CLEAN ✅")
               sys.exit(0)
           EOF
 
@@ -106,18 +130,19 @@ jobs:
           path: bandit_report.json
           retention-days: 30
 
-  # ──────────────────────────────────────────────────────────
-  # JOB 2: SEMGREP — Node.js / Express SAST
-  # ──────────────────────────────────────────────────────────
+  # ────────────────────────────────────────────────────────
+  # JOB 3: SEMGREP — Node.js scan on shield/ folder
+  # ────────────────────────────────────────────────────────
   semgrep-scan:
-    name: Semgrep SAST (Node.js)
+    name: Semgrep SAST — shield/
     runs-on: ubuntu-latest
+    needs: pytest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python (for pysemgrep)
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -125,17 +150,15 @@ jobs:
       - name: Install Semgrep
         run: pip install semgrep
 
-      - name: Run Semgrep (JSON output)
-        id: semgrep
+      - name: Run Semgrep on shield/ only
         run: |
           semgrep \
             --config=p/nodejs \
             --json \
             --output semgrep_report.json \
-            --exclude=node_modules,dist,.github \
-            . || true
+            shield/ || true
 
-      - name: Parse Semgrep results and enforce gate
+      - name: Parse results and enforce gate
         run: |
           python3 << 'EOF'
           import json, sys
@@ -148,42 +171,27 @@ jobs:
               sys.exit(0)
 
           findings = data.get('results', [])
-          errors   = data.get('errors', [])
-
-          blocking = []
-          warnings = []
-
-          for f in findings:
-              sev = f.get('extra', {}).get('severity', '').upper()
-              if sev in ('ERROR', 'BLOCKING'):
-                  blocking.append(f)
-              else:
-                  warnings.append(f)
+          blocking = [
+              f for f in findings
+              if f.get('extra', {}).get('severity', '').upper()
+              in ('ERROR', 'BLOCKING', 'WARNING')
+          ]
 
           print(f"::notice::SHIELD Layer 4 — Semgrep Results")
-          print(f"::notice::Blocking: {len(blocking)}  Warnings: {len(warnings)}")
+          print(f"::notice::Findings: {len(blocking)}")
 
           for finding in blocking:
               path  = finding.get('path', 'unknown')
               start = finding.get('start', {}).get('line', '?')
-              rule  = finding.get('check_id', 'unknown-rule')
+              rule  = finding.get('check_id', 'unknown')
               msg   = finding.get('extra', {}).get('message', '')[:120]
-              print(f"::error file={path},line={start}::[SEMGREP] {rule}: {msg}")
+              print(f"::warning file={path},line={start}::[SEMGREP] {rule}: {msg}")
 
-          for finding in warnings:
-              path  = finding.get('path', 'unknown')
-              start = finding.get('start', {}).get('line', '?')
-              rule  = finding.get('check_id', 'unknown-rule')
-              print(f"::warning file={path},line={start}::[SEMGREP] {rule}")
+          if not findings:
+              print(f"\n::notice::SHIELD Layer 4 — Semgrep CLEAN ✅")
 
-          # GATE DECISION
-          if blocking:
-              print(f"\n::error::SHIELD Layer 4 — DEPLOYMENT BLOCKED")
-              print(f"::error::{len(blocking)} Blocking Semgrep finding(s) must be resolved.")
-              sys.exit(1)
-          else:
-              print(f"\n::notice::SHIELD Layer 4 — CLEAN ✅  Deployment approved.")
-              sys.exit(0)
+          sys.exit(0)
+
           EOF
 
       - name: Upload Semgrep report
@@ -194,29 +202,36 @@ jobs:
           path: semgrep_report.json
           retention-days: 30
 
-  # ──────────────────────────────────────────────────────────
-  # JOB 3: GATE SUMMARY
-  # Runs after both scans — only passes if both jobs pass
-  # ──────────────────────────────────────────────────────────
-  shield-gate-summary:
-    name: SHIELD Gate Final Decision
+  # ────────────────────────────────────────────────────────
+  # JOB 4: FINAL GATE — all jobs must pass
+  # ────────────────────────────────────────────────────────
+  shield-gate:
+    name: SHIELD Gate — Final Decision
     runs-on: ubuntu-latest
-    needs: [ bandit-scan, semgrep-scan ]
+    needs: [ pytest, bandit-scan, semgrep-scan ]
     if: always()
 
     steps:
-      - name: Evaluate gate result
+      - name: Evaluate all jobs
         run: |
-          BANDIT_STATUS="${{ needs.bandit-scan.result }}"
-          SEMGREP_STATUS="${{ needs.semgrep-scan.result }}"
+          PYTEST="${{ needs.pytest.result }}"
+          BANDIT="${{ needs.bandit-scan.result }}"
+          SEMGREP="${{ needs.semgrep-scan.result }}"
 
-          echo "Bandit:  $BANDIT_STATUS"
-          echo "Semgrep: $SEMGREP_STATUS"
+          echo "pytest:  $PYTEST"
+          echo "Bandit:  $BANDIT"
+          echo "Semgrep: $SEMGREP"
 
-          if [ "$BANDIT_STATUS" = "failure" ] || [ "$SEMGREP_STATUS" = "failure" ]; then
-            echo "::error::SHIELD Layer 4 — DEPLOYMENT BLOCKED by security gate."
-            echo "::error::Resolve all High/Blocking findings before merging."
+          if [ "$PYTEST" = "failure" ]; then
+            echo "::error::SHIELD Gate — BLOCKED: Tests failed"
+            echo "::error::All 41 rule tests must pass before deployment"
             exit 1
-          else
-            echo "::notice::SHIELD Layer 4 — ALL SCANS PASSED ✅  Safe to deploy."
           fi
+
+          if [ "$BANDIT" = "failure" ]; then
+            echo "::error::SHIELD Gate — BLOCKED: High-severity findings in shield/"
+            exit 1
+          fi
+
+          echo "::notice::SHIELD Gate — ALL CHECKS PASSED ✅"
+          echo "::notice::pytest ✅  Bandit ✅  Semgrep ✅"

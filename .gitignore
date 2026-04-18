@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# SHIELD results (generated — not committed)
+shield_results/
+results/layer3_fdsp/working_copy/
+
+# Research working copies (never commit fixed versions over originals)
+research/results/*/working_copy/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Environment variables
+.env
+*.env

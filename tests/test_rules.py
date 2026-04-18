@@ -1,0 +1,344 @@
+"""
+SHIELD Security — Test Suite
+=============================
+Tests for all fix functions in shield/rules/custom_rules.py
+
+Run with:
+  pytest tests/ -v
+
+Every rule has:
+  1. A positive test — confirms the fix works
+  2. A negative test — confirms no false positives
+  3. An edge case — confirms it handles unusual input
+
+Author: Ali Yasin Idrees
+Version: 0.1.0
+"""
+
+import pytest
+from shield.rules.custom_rules import (
+    fix_B201_debug_true,
+    fix_B602_shell_true,
+    fix_B105_B106_hardcoded,
+    fix_B324_weak_hash,
+    fix_B104_bind_all,
+    fix_B108_tmp_dir,
+    fix_B311_random,
+    fix_B101_assert,
+    fix_werkzeug_weak_hash,
+    fix_sql_fstring,
+    REMEDIATION_MAP,
+)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# B201 — debug=True
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestB201DebugTrue:
+
+    def test_fixes_standalone_debug_true(self):
+        code = "app.run(debug=True)"
+        fixed, count = fix_B201_debug_true(code)
+        assert "debug=True" not in fixed
+        assert "debug=False" in fixed
+        assert count > 0
+
+    def test_fixes_debug_true_with_other_args(self):
+        code = "app.run(host='0.0.0.0', debug=True, port=5000)"
+        fixed, count = fix_B201_debug_true(code)
+        assert "debug=True" not in fixed
+        assert "debug=False" in fixed
+        assert count > 0
+
+    def test_no_false_positive_when_already_false(self):
+        code = "app.run(debug=False)"
+        fixed, count = fix_B201_debug_true(code)
+        assert count == 0
+        assert fixed == code
+
+    def test_no_false_positive_on_unrelated_code(self):
+        code = "x = True\nprint(x)"
+        fixed, count = fix_B201_debug_true(code)
+        assert count == 0
+        assert fixed == code
+
+    def test_empty_string(self):
+        fixed, count = fix_B201_debug_true("")
+        assert count == 0
+        assert fixed == ""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# B602 — shell=True
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestB602ShellTrue:
+
+    def test_fixes_shell_true(self):
+        code = "subprocess.run(['ls'], shell=True)"
+        fixed, count = fix_B602_shell_true(code)
+        assert "shell=True" not in fixed
+        assert "shell=False" in fixed
+        assert count > 0
+
+    def test_adds_whitelist_comment(self):
+        code = "import subprocess\nsubprocess.run(cmd, shell=True)"
+        fixed, count = fix_B602_shell_true(code)
+        assert "ALLOWED_COMMANDS" in fixed
+
+    def test_no_false_positive_when_already_false(self):
+        code = "subprocess.run(cmd, shell=False)"
+        fixed, count = fix_B602_shell_true(code)
+        assert count == 0
+
+    def test_no_false_positive_on_unrelated_code(self):
+        code = "shell = True\nprint(shell)"
+        fixed, count = fix_B602_shell_true(code)
+        assert count == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# B105/B106 — Hardcoded passwords
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestB105HardcodedPasswords:
+
+    def test_fixes_secret_key(self):
+        code = "SECRET_KEY = 'mysecretkey123'"
+        fixed, count = fix_B105_B106_hardcoded(code)
+        assert "'mysecretkey123'" not in fixed
+        assert "os.environ.get" in fixed
+        assert count > 0
+
+    def test_fixes_app_secret_key(self):
+        code = "app.secret_key = 'hardcodedvalue'"
+        fixed, count = fix_B105_B106_hardcoded(code)
+        assert "'hardcodedvalue'" not in fixed
+        assert "os.environ.get" in fixed
+
+    def test_fixes_mail_password(self):
+        code = "MAIL_PASSWORD = 'mypassword123'"
+        fixed, count = fix_B105_B106_hardcoded(code)
+        assert "'mypassword123'" not in fixed
+        assert "os.environ.get" in fixed
+
+    def test_adds_os_import(self):
+        code = "SECRET_KEY = 'mysecretkey123'"
+        fixed, count = fix_B105_B106_hardcoded(code)
+        assert "import os" in fixed
+
+    def test_no_false_positive_when_already_env(self):
+        code = "SECRET_KEY = os.environ.get('FLASK_SECRET_KEY')"
+        fixed, count = fix_B105_B106_hardcoded(code)
+        assert count == 0
+
+    def test_no_false_positive_short_string(self):
+        # Strings under 3 chars should not be flagged
+        code = "x = 'ab'"
+        fixed, count = fix_B105_B106_hardcoded(code)
+        assert count == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# B324 — Weak hash (MD5 / SHA1)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestB324WeakHash:
+
+    def test_fixes_md5(self):
+        code = "hashlib.md5(data)"
+        fixed, count = fix_B324_weak_hash(code)
+        assert "hashlib.md5" not in fixed
+        assert "hashlib.sha256" in fixed
+        assert "usedforsecurity=False" in fixed
+        assert count > 0
+
+    def test_fixes_sha1(self):
+        code = "hashlib.sha1(data)"
+        fixed, count = fix_B324_weak_hash(code)
+        assert "hashlib.sha1" not in fixed
+        assert "hashlib.sha256" in fixed
+        assert count > 0
+
+    def test_no_false_positive_sha256(self):
+        code = "hashlib.sha256(data)"
+        fixed, count = fix_B324_weak_hash(code)
+        assert count == 0
+
+    def test_no_false_positive_unrelated(self):
+        code = "x = 'md5 is a word'"
+        fixed, count = fix_B324_weak_hash(code)
+        assert count == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# B104 — Bind all interfaces
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestB104BindAll:
+
+    def test_fixes_bind_all(self):
+        code = "app.run(host='0.0.0.0')"
+        fixed, count = fix_B104_bind_all(code)
+        assert "0.0.0.0" not in fixed
+        assert "os.environ.get" in fixed
+        assert count > 0
+
+    def test_no_false_positive_localhost(self):
+        code = "app.run(host='127.0.0.1')"
+        fixed, count = fix_B104_bind_all(code)
+        assert count == 0
+
+    def test_no_false_positive_unrelated(self):
+        code = "ip = '192.168.1.1'"
+        fixed, count = fix_B104_bind_all(code)
+        assert count == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# B108 — Hardcoded /tmp directory
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestB108TmpDir:
+
+    def test_fixes_tmp_path(self):
+        code = "UPLOAD_FOLDER = '/tmp/uploads'"
+        fixed, count = fix_B108_tmp_dir(code)
+        assert "/tmp/uploads" not in fixed
+        assert count > 0
+
+    def test_no_false_positive_unrelated(self):
+        code = "message = 'this is temporary'"
+        fixed, count = fix_B108_tmp_dir(code)
+        assert count == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# B311 — Insecure random
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestB311Random:
+
+    def test_flags_random_randint(self):
+        code = "x = random.randint(1, 100)"
+        fixed, count = fix_B311_random(code)
+        assert "nosec B311" in fixed
+        assert count > 0
+
+    def test_flags_random_choice(self):
+        code = "item = random.choice(items)"
+        fixed, count = fix_B311_random(code)
+        assert "nosec B311" in fixed
+        assert count > 0
+
+    def test_no_false_positive_secrets(self):
+        code = "token = secrets.token_urlsafe(32)"
+        fixed, count = fix_B311_random(code)
+        assert count == 0
+
+    def test_no_false_positive_unrelated(self):
+        code = "import random"
+        fixed, count = fix_B311_random(code)
+        assert count == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CUSTOM — Werkzeug weak hash
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestWerkzeugWeakHash:
+
+    def test_fixes_generate_password_hash(self):
+        code = (
+            "from werkzeug.security import generate_password_hash\n"
+            "hash = generate_password_hash(password)\n"
+        )
+        fixed, count = fix_werkzeug_weak_hash(code)
+        assert "generate_password_hash" not in fixed
+        assert "bcrypt" in fixed
+        assert count > 0
+
+    def test_keeps_check_password_hash(self):
+        code = (
+            "from werkzeug.security import generate_password_hash, check_password_hash\n"
+            "hash = generate_password_hash(password)\n"
+            "check_password_hash(hash, password)\n"
+        )
+        fixed, count = fix_werkzeug_weak_hash(code)
+        assert "check_password_hash" in fixed
+        assert "generate_password_hash" not in fixed
+        assert "bcrypt" in fixed
+
+    def test_no_false_positive_no_werkzeug(self):
+        code = "from flask import Flask\napp = Flask(__name__)"
+        fixed, count = fix_werkzeug_weak_hash(code)
+        assert count == 0
+
+    def test_adds_bcrypt_import(self):
+        code = (
+            "from werkzeug.security import generate_password_hash\n"
+            "hash = generate_password_hash(password)\n"
+        )
+        fixed, count = fix_werkzeug_weak_hash(code)
+        assert "import bcrypt" in fixed
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CUSTOM — SQL f-string injection
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestSQLFstring:
+
+    def test_detects_fstring_sql(self):
+        code = "db.execute(f\"SELECT * FROM users WHERE id = {user_id}\")"
+        fixed, count = fix_sql_fstring(code)
+        assert count > 0
+
+    def test_detects_concatenated_sql(self):
+        code = "db.execute(\"SELECT * FROM users WHERE name = \" + name)"
+        fixed, count = fix_sql_fstring(code)
+        assert count > 0
+
+    def test_no_false_positive_parameterized(self):
+        code = "db.execute('SELECT * FROM users WHERE id = ?', (user_id,))"
+        fixed, count = fix_sql_fstring(code)
+        assert count == 0
+
+    def test_no_false_positive_unrelated(self):
+        code = "message = f'Hello {name}'"
+        fixed, count = fix_sql_fstring(code)
+        assert count == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REMEDIATION MAP — structural tests
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestRemediationMap:
+
+    def test_map_is_not_empty(self):
+        assert len(REMEDIATION_MAP) > 0
+
+    def test_all_values_are_callable(self):
+        for rule_id, fn in REMEDIATION_MAP.items():
+            assert callable(fn), f"{rule_id} is not callable"
+
+    def test_critical_rules_present(self):
+        critical = ['B201', 'B602', 'B324', 'B104', 'B105']
+        for rule in critical:
+            assert rule in REMEDIATION_MAP, f"{rule} missing from REMEDIATION_MAP"
+
+    def test_custom_rules_present(self):
+        assert 'CUSTOM_WERKZEUG' in REMEDIATION_MAP
+        assert 'CUSTOM_SQL_FSTRING' in REMEDIATION_MAP
+
+    def test_all_functions_return_tuple(self):
+        """Every fix function must return (str, int)"""
+        test_code = "app.run(debug=True)"
+        for rule_id, fn in REMEDIATION_MAP.items():
+            result = fn(test_code)
+            assert isinstance(result, tuple), f"{rule_id} does not return tuple"
+            assert len(result) == 2, f"{rule_id} tuple must have 2 elements"
+            assert isinstance(result[0], str), f"{rule_id} first element must be str"
+            assert isinstance(result[1], int), f"{rule_id} second element must be int"

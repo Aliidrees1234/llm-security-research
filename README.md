@@ -103,6 +103,50 @@ llm-security-research/
 ---
 
 ## Running the SHIELD Tools
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/Aliidrees1234/llm-security-research
+cd llm-security-research
+
+# Install SHIELD as a CLI tool
+pip install -e .
+
+# Verify installation
+shield version
+```
+
+---
+
+## Usage
+
+```bash
+# Scan a project for vulnerabilities
+shield scan ./my_project
+
+# Auto-fix vulnerabilities — safe copy
+shield fix ./my_project --output ./fixed
+
+# Auto-fix directly in place
+shield fix ./my_project --inplace
+
+# Maximum FDSP iterations
+shield fix ./my_project --output ./fixed --k 3
+```
+
+---
+
+## Run Tests
+
+```bash
+pip install pytest
+pytest tests/ -v
+```
+
+Expected output: 
+41 passed in 0.xx s
+-----
 
 ### Layer 2 — GRASP DAG (Prompt Enhancer)
 

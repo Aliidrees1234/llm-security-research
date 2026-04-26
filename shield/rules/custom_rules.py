@@ -16,70 +16,193 @@ Rule function signature:
 Author: Ali Yasin Idrees
 Version: 0.1.0
 """
-
 import re
+import ast
+import astor
 
 # ── BANDIT RULES ──────────────────────────────────────────────────────────────
+class _DebugFixer(ast.NodeTransformer):
+    """
+    Walks the AST tree looking for app.run(debug=True).
+    When found — replaces Constant(True) with Constant(False).
+    Works regardless of spacing, formatting, or argument order.
+    """
+    def __init__(self):
+        self.fixes = 0
 
+    def visit_Call(self, node):
+        # Is this a method call? (.run() for example)
+        if isinstance(node.func, ast.Attribute):
+            # Is the method name 'run'?
+            if node.func.attr == 'run':
+                # Walk through all keyword arguments
+                for keyword in node.keywords:
+                    # Is this the debug argument?
+                    if keyword.arg == 'debug':
+                        # Is the value literally True?
+                        if (isinstance(keyword.value, ast.Constant)
+                                and keyword.value.value is True):
+                            # Replace True with False
+                            keyword.value = ast.Constant(value=False)
+                            self.fixes += 1
+        # Keep walking the rest of the tree
+        return self.generic_visit(node)
+    
 def fix_B201_debug_true(code: str) -> tuple[str, int]:
     """
     B201 — flask_debug_true
     Severity: HIGH | CWE-94
-    Replace app.run(debug=True) with debug=False bound to localhost.
+    Replace app.run(debug=True) with debug=False.
+
+    Strategy:
+      1. Try AST fix — robust, handles all formatting
+      2. If AST fails (syntax error) — fall back to regex
     """
-    original = code
+    if not code.strip():
+        return code, 0
 
-    code = re.sub(
-        r'(app\.run\([^)]*?)debug\s*=\s*True([^)]*?\))',
-        lambda m: m.group(1) + "debug=False" + m.group(2),
-        code
-    )
-    code = re.sub(
-        r'app\.run\(\s*debug\s*=\s*True\s*\)',
-        "app.run(debug=False, host='127.0.0.1', "
-        "port=int(os.environ.get('PORT', 5000)))",
-        code
-    )
-    if "app.run(" in code and "import os" not in code and "os.environ" in code:
-        code = "import os\n" + code
+    # ── AST approach (primary) ─────────────────────────────────────────────
+    try:
+        tree = ast.parse(code)
+        fixer = _DebugFixer()
+        new_tree = fixer.visit(tree)
 
-    fixes = 0 if code == original else code.count("debug=False")
-    return code, fixes
+        if fixer.fixes > 0:
+            fixed_code = astor.to_source(new_tree)
 
+            # Add os import if needed
+            if "os.environ" in fixed_code and "import os" not in fixed_code:
+                fixed_code = "import os\n" + fixed_code
+
+            return fixed_code, fixer.fixes
+
+        return code, 0
+
+    # ── Regex fallback (if file has syntax errors) ─────────────────────────
+    except SyntaxError:
+        original = code
+        code = re.sub(
+            r'(app\.run\([^)]*?)debug\s*=\s*True([^)]*?\))',
+            lambda m: m.group(1) + "debug=False" + m.group(2),
+            code
+        )
+        code = re.sub(
+            r'app\.run\(\s*debug\s*=\s*True\s*\)',
+            "app.run(debug=False, host='127.0.0.1', "
+            "port=int(os.environ.get('PORT', 5000)))",
+            code
+        )
+        if "app.run(" in code and "import os" not in code and "os.environ" in code:
+            code = "import os\n" + code
+        fixes = 0 if code == original else code.count("debug=False")
+        return code, fixes
+
+
+class _ShellFixer(ast.NodeTransformer):
+    """
+    Walks the AST looking for subprocess calls with shell=True.
+    Replaces Constant(True) with Constant(False) on the shell keyword.
+
+    Catches all subprocess variants:
+      subprocess.run(cmd, shell=True)
+      subprocess.call(cmd, shell=True)
+      subprocess.Popen(cmd, shell=True)
+      subprocess.check_output(cmd, shell=True)
+    """
+    SUBPROCESS_METHODS = {'run', 'call', 'Popen', 'check_output', 'check_call'}
+
+    def __init__(self):
+        self.fixes = 0
+
+    def visit_Call(self, node):
+        # Is this a method call?
+        if isinstance(node.func, ast.Attribute):
+            # Is it a subprocess method?
+            if node.func.attr in self.SUBPROCESS_METHODS:
+                # Is the object named subprocess?
+                if (isinstance(node.func.value, ast.Name) and
+                        node.func.value.id == 'subprocess'):
+                    # Walk keyword arguments
+                    for keyword in node.keywords:
+                        if keyword.arg == 'shell':
+                            if (isinstance(keyword.value, ast.Constant)
+                                    and keyword.value.value is True):
+                                # Replace True with False
+                                keyword.value = ast.Constant(value=False)
+                                self.fixes += 1
+        return self.generic_visit(node)
 
 def fix_B602_shell_true(code: str) -> tuple[str, int]:
     """
     B602 — subprocess_popen_shell_true
     Severity: HIGH | CWE-78
-    Replace shell=True with shell=False and inject command whitelist.
+    Replace shell=True with shell=False.
+    Inject command whitelist comment for developer guidance.
+
+    Strategy:
+      1. Try AST fix — finds all subprocess variants robustly
+      2. If AST fails (syntax error) — fall back to regex
     """
-    original = code
-    fixes = 0
+    if not code.strip():
+        return code, 0
 
-    if re.search(r'subprocess\.\w+\([^)]*shell\s*=\s*True', code):
-        code = re.sub(r'shell\s*=\s*True', 'shell=False', code)
+    # ── AST approach (primary) ─────────────────────────────────────────────
+    try:
+        tree = ast.parse(code)
+        fixer = _ShellFixer()
+        new_tree = fixer.visit(tree)
 
-        if 'ALLOWED_COMMANDS' not in code and 'whitelist' not in code.lower():
-            whitelist_block = (
-                "\n# SHIELD Layer 3 — B602 remediation: shell argument set to False\n"
-                "# Define command whitelist for safe subprocess execution\n"
-                "ALLOWED_COMMANDS = {\n"
-                '    "status": ["/usr/bin/uptime"],\n'
-                '    "disk":   ["/bin/df", "-h"],\n'
-                "}\n"
-            )
-            import_end = 0
-            for i, line in enumerate(code.split('\n')):
-                if line.startswith('from ') or line.startswith('import '):
-                    import_end = i
-            lines = code.split('\n')
-            lines.insert(import_end + 1, whitelist_block)
-            code = '\n'.join(lines)
+        if fixer.fixes > 0:
+            fixed_code = astor.to_source(new_tree)
 
-        fixes = 1
+            # Inject whitelist guidance if not already present
+            if ('ALLOWED_COMMANDS' not in fixed_code and
+                    'whitelist' not in fixed_code.lower()):
+                whitelist_block = (
+                    "\n# SHIELD — B602 fix: shell argument set to False\n"
+                    "# Define command whitelist for safe subprocess execution\n"
+                    "ALLOWED_COMMANDS = {\n"
+                    '    "status": ["/usr/bin/uptime"],\n'
+                    '    "disk":   ["/bin/df", "-h"],\n'
+                    "}\n"
+                )
+                # Insert after imports
+                lines = fixed_code.split('\n')
+                import_end = 0
+                for i, line in enumerate(lines):
+                    if line.startswith('from ') or line.startswith('import '):
+                        import_end = i
+                lines.insert(import_end + 1, whitelist_block)
+                fixed_code = '\n'.join(lines)
 
-    return code, fixes
+            return fixed_code, fixer.fixes
 
+        return code, 0
+
+    # ── Regex fallback ─────────────────────────────────────────────────────
+    except SyntaxError:
+        original = code
+        fixes = 0
+        if re.search(r'subprocess\.\w+\([^)]*shell\s*=\s*True', code):
+            code = re.sub(r'shell\s*=\s*True', 'shell=False', code)
+            if ('ALLOWED_COMMANDS' not in code and
+                    'whitelist' not in code.lower()):
+                whitelist_block = (
+                    "\n# SHIELD — B602 fix: shell argument set to False\n"
+                    "ALLOWED_COMMANDS = {\n"
+                    '    "status": ["/usr/bin/uptime"],\n'
+                    '    "disk":   ["/bin/df", "-h"],\n'
+                    "}\n"
+                )
+                import_end = 0
+                for i, line in enumerate(code.split('\n')):
+                    if line.startswith('from ') or line.startswith('import '):
+                        import_end = i
+                lines = code.split('\n')
+                lines.insert(import_end + 1, whitelist_block)
+                code = '\n'.join(lines)
+            fixes = 1
+        return code, fixes
 
 def fix_B105_B106_hardcoded(code: str) -> tuple[str, int]:
     """

@@ -39,7 +39,7 @@ jobs:
       - name: Install SHIELD and dependencies
         run: |
           pip install -e .
-          pip install pytest bandit bcrypt colorama
+          pip install pytest bandit bcrypt colorama astor
 
       - name: Run pytest
         run: |

@@ -203,40 +203,137 @@ def fix_B602_shell_true(code: str) -> tuple[str, int]:
                 code = '\n'.join(lines)
             fixes = 1
         return code, fixes
+    
+class _HardcodedSecretFixer(ast.NodeTransformer):
+    """
+    Walks the AST looking for hardcoded secret assignments.
+
+    Catches these patterns:
+      SECRET_KEY = 'literal'
+      app.secret_key = 'literal'
+      MAIL_PASSWORD = 'literal'
+      SECURITY_PASSWORD_SALT = 'literal'
+
+    Replaces with:
+      SECRET_KEY = os.environ.get('FLASK_SECRET_KEY')
+      app.secret_key = os.environ.get('FLASK_SECRET_KEY')
+      MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+      SECURITY_PASSWORD_SALT = os.environ.get('SECURITY_PASSWORD_SALT')
+    """
+
+    # Map of variable names to their env var names
+    SECRET_VARS = {
+        'SECRET_KEY':              'FLASK_SECRET_KEY',
+        'MAIL_PASSWORD':           'MAIL_PASSWORD',
+        'SECURITY_PASSWORD_SALT':  'SECURITY_PASSWORD_SALT',
+        'API_KEY':                 'API_KEY',
+        'DB_PASSWORD':             'DB_PASSWORD',
+    }
+
+    # Minimum length to be considered a real secret (not a placeholder)
+    MIN_SECRET_LEN = 3
+
+    def __init__(self):
+        self.fixes = 0
+        self.needs_os_import = False
+
+    def _make_environ_call(self, env_var: str) -> ast.Call:
+        """Build the AST node for os.environ.get('VAR_NAME')"""
+        return ast.Call(
+            func=ast.Attribute(
+                value=ast.Attribute(
+                    value=ast.Name(id='os', ctx=ast.Load()),
+                    attr='environ',
+                    ctx=ast.Load()
+                ),
+                attr='get',
+                ctx=ast.Load()
+            ),
+            args=[ast.Constant(value=env_var)],
+            keywords=[]
+        )
+
+    def visit_Assign(self, node):
+        """Handle: SECRET_KEY = 'literal'"""
+        for target in node.targets:
+            # Simple name assignment: SECRET_KEY = 'value'
+            if isinstance(target, ast.Name):
+                var_name = target.id
+                if var_name in self.SECRET_VARS:
+                    if (isinstance(node.value, ast.Constant) and
+                            isinstance(node.value.value, str) and
+                            len(node.value.value) >= self.MIN_SECRET_LEN):
+                        env_var = self.SECRET_VARS[var_name]
+                        node.value = self._make_environ_call(env_var)
+                        self.fixes += 1
+                        self.needs_os_import = True
+
+            # Attribute assignment: app.secret_key = 'value'
+            elif isinstance(target, ast.Attribute):
+                attr_name = target.attr
+                if attr_name == 'secret_key':
+                    if (isinstance(node.value, ast.Constant) and
+                            isinstance(node.value.value, str) and
+                            len(node.value.value) >= self.MIN_SECRET_LEN):
+                        node.value = self._make_environ_call('FLASK_SECRET_KEY')
+                        self.fixes += 1
+                        self.needs_os_import = True
+
+        return self.generic_visit(node)
 
 def fix_B105_B106_hardcoded(code: str) -> tuple[str, int]:
     """
     B105/B106 — hardcoded_password_string / hardcoded_password_funcarg
     Severity: LOW | CWE-259
     Replace hardcoded secrets with os.environ.get().
+
+    Strategy:
+      1. Try AST fix — finds assignments by structure not text
+      2. If AST fails (syntax error) — fall back to regex
     """
-    original = code
-    fixes = 0
+    if not code.strip():
+        return code, 0
 
-    patterns = [
-        (r"(SECRET_KEY\s*=\s*)['\"][^'\"]{3,}['\"]",
-         r"\1os.environ.get('FLASK_SECRET_KEY')"),
-        (r"(app\.secret_key\s*=\s*)['\"][^'\"]{3,}['\"]",
-         r"\1os.environ.get('FLASK_SECRET_KEY')"),
-        (r"(app\.config\[['\"](?:SECRET_KEY|MAIL_PASSWORD|PASSWORD|"
-         r"API_KEY|DB_PASSWORD)['\"]\]\s*=\s*)['\"][^'\"]{3,}['\"]",
-         r"\1os.environ.get('SECRET_KEY')"),
-        (r"(MAIL_PASSWORD\s*=\s*)['\"][^'\"]{3,}['\"]",
-         r"\1os.environ.get('MAIL_PASSWORD')"),
-        (r"(SECURITY_PASSWORD_SALT\s*=\s*)['\"][^'\"]{3,}['\"]",
-         r"\1os.environ.get('SECURITY_PASSWORD_SALT')"),
-    ]
+    # ── AST approach (primary) ─────────────────────────────────────────────
+    try:
+        tree = ast.parse(code)
+        fixer = _HardcodedSecretFixer()
+        new_tree = fixer.visit(tree)
+        ast.fix_missing_locations(new_tree)
 
-    for pattern, replacement in patterns:
-        new_code = re.sub(pattern, replacement, code)
-        if new_code != code:
-            fixes += 1
-            code = new_code
+        if fixer.fixes > 0:
+            fixed_code = astor.to_source(new_tree)
 
-    if 'os.environ.get' in code and 'import os' not in code:
-        code = "import os\n" + code
+            # Add os import if needed and not already present
+            if fixer.needs_os_import and 'import os' not in fixed_code:
+                fixed_code = "import os\n" + fixed_code
 
-    return code, fixes
+            return fixed_code, fixer.fixes
+
+        return code, 0
+
+    # ── Regex fallback ─────────────────────────────────────────────────────
+    except SyntaxError:
+        original = code
+        fixes = 0
+        patterns = [
+            (r"(SECRET_KEY\s*=\s*)['\"][^'\"]{3,}['\"]",
+             r"\1os.environ.get('FLASK_SECRET_KEY')"),
+            (r"(app\.secret_key\s*=\s*)['\"][^'\"]{3,}['\"]",
+             r"\1os.environ.get('FLASK_SECRET_KEY')"),
+            (r"(MAIL_PASSWORD\s*=\s*)['\"][^'\"]{3,}['\"]",
+             r"\1os.environ.get('MAIL_PASSWORD')"),
+            (r"(SECURITY_PASSWORD_SALT\s*=\s*)['\"][^'\"]{3,}['\"]",
+             r"\1os.environ.get('SECURITY_PASSWORD_SALT')"),
+        ]
+        for pattern, replacement in patterns:
+            new_code = re.sub(pattern, replacement, code)
+            if new_code != code:
+                fixes += 1
+                code = new_code
+        if 'os.environ.get' in code and 'import os' not in code:
+            code = "import os\n" + code
+        return code, fixes
 
 
 def fix_B324_weak_hash(code: str) -> tuple[str, int]:

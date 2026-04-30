@@ -223,12 +223,12 @@ class _HardcodedSecretFixer(ast.NodeTransformer):
 
     # Map of variable names to their env var names
     SECRET_VARS = {
-        'SECRET_KEY':              'FLASK_SECRET_KEY',
-        'MAIL_PASSWORD':           'MAIL_PASSWORD',
-        'SECURITY_PASSWORD_SALT':  'SECURITY_PASSWORD_SALT',
-        'API_KEY':                 'API_KEY',
-        'DB_PASSWORD':             'DB_PASSWORD',
-    }
+    'SECRET_KEY':             'FLASK_SECRET_KEY',           # nosec B105 — mapping key, not a secret
+    'MAIL_PASSWORD':          'MAIL_PASSWORD',              # nosec B105 — mapping key, not a secret
+    'SECURITY_PASSWORD_SALT': 'SECURITY_PASSWORD_SALT',     # nosec B105 — mapping key, not a secret
+    'API_KEY':                'API_KEY',                    # nosec B105 — mapping key, not a secret
+    'DB_PASSWORD':            'DB_PASSWORD',                # nosec B105 — mapping key, not a secret
+}
 
     # Minimum length to be considered a real secret (not a placeholder)
     MIN_SECRET_LEN = 3

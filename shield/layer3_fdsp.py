@@ -31,13 +31,49 @@ from datetime import datetime
 from shield.rules.custom_rules import REMEDIATION_MAP
 
 def apply_all_fixes(code: str) -> tuple[str, dict]:
-    """Apply all remediation functions. Returns fixed code + summary."""
+    """
+    Apply all remediation functions to code.
+    Uses safe_apply for AST rules — never crashes on bad input.
+    Returns fixed code + fix summary.
+    """
+    from shield.rules.custom_rules import (
+        REMEDIATION_MAP, safe_apply,
+        _regex_B201, _regex_B602, _regex_B105,
+        fix_B201_debug_true, fix_B602_shell_true, fix_B105_B106_hardcoded,
+    )
+
     summary = {}
-    for rule_id, fix_fn in REMEDIATION_MAP.items():
-        fixed, count = fix_fn(code)
-        if count > 0:
-            summary[rule_id] = count
-            code = fixed
+
+    # AST rules — use safe_apply with regex fallback
+    ast_rules = {
+        'B201': (fix_B201_debug_true, _regex_B201),
+        'B602': (fix_B602_shell_true, _regex_B602),
+        'B105': (fix_B105_B106_hardcoded, _regex_B105),
+        'B106': (fix_B105_B106_hardcoded, _regex_B105),
+    }
+
+    for rule_id, (ast_fn, regex_fn) in ast_rules.items():
+        result = safe_apply(ast_fn, regex_fn, code, rule_id)
+        if result.fixes > 0:
+            summary[rule_id] = result.fixes
+            summary[f'{rule_id}_strategy'] = result.strategy
+            code = result.code
+        if result.error:
+            summary[f'{rule_id}_error'] = result.error
+
+    # Remaining rules — direct call (regex only, no AST yet)
+    remaining = {k: v for k, v in REMEDIATION_MAP.items()
+                 if k not in ast_rules}
+
+    for rule_id, fix_fn in remaining.items():
+        try:
+            fixed, count = fix_fn(code)
+            if count > 0:
+                summary[rule_id] = count
+                code = fixed
+        except Exception as e:
+            summary[f'{rule_id}_error'] = str(e)
+
     return code, summary
 
 # ── BANDIT RUNNER ─────────────────────────────────────────────────────────────

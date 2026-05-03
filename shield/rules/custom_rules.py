@@ -20,6 +20,132 @@ import re
 import ast
 import astor
 
+# ── FALLBACK MANAGER ──────────────────────────────────────────────────────────
+
+class RuleResult:
+    """
+    Wraps the result of every fix function.
+    Tracks: fixed code, fix count, which strategy was used, any errors.
+    """
+    def __init__(self, code: str, fixes: int,
+                 strategy: str = "none", error: str = None):
+        self.code     = code
+        self.fixes    = fixes
+        self.strategy = strategy  # "ast", "regex", or "none"
+        self.error    = error     # error message if fallback triggered
+
+    def __repr__(self):
+        return (f"RuleResult(fixes={self.fixes}, "
+                f"strategy='{self.strategy}', "
+                f"error={self.error!r})")
+
+
+def safe_apply(ast_fn, regex_fn, code: str, rule_id: str) -> RuleResult:
+    """
+    Central hybrid executor.
+    Tries AST fix first. Falls back to regex if AST raises any error.
+    Always returns a RuleResult — never crashes.
+
+    Args:
+        ast_fn:   function that applies AST-based fix
+        regex_fn: function that applies regex-based fix (fallback)
+        code:     source code string to fix
+        rule_id:  rule identifier for logging (e.g. 'B201')
+
+    Returns:
+        RuleResult with fixed code, fix count, and strategy used
+    """
+    if not code.strip():
+        return RuleResult(code, 0, strategy="none")
+
+    # ── Try AST first ─────────────────────────────────────────────────────
+    try:
+        fixed, count = ast_fn(code)
+        if count > 0:
+            return RuleResult(fixed, count, strategy="ast")
+        # AST found nothing to fix — that's fine, not an error
+        return RuleResult(code, 0, strategy="ast")
+
+    except SyntaxError as e:
+        # File has syntax errors — expected, fall back to regex
+        pass
+    except Exception as e:
+        # Unexpected AST error — log and fall back
+        error_msg = f"{rule_id} AST error: {type(e).__name__}: {e}"
+        try:
+            fixed, count = regex_fn(code)
+            return RuleResult(fixed, count, strategy="regex", error=error_msg)
+        except Exception as re:
+            return RuleResult(code, 0, strategy="none",
+                            error=f"{error_msg} | Regex also failed: {re}")
+
+    # ── Regex fallback ─────────────────────────────────────────────────────
+    try:
+        fixed, count = regex_fn(code)
+        return RuleResult(fixed, count, strategy="regex")
+    except Exception as e:
+        return RuleResult(code, 0, strategy="none",
+                        error=f"{rule_id} regex fallback failed: {e}")
+    
+
+
+# ── PURE REGEX FALLBACKS ──────────────────────────────────────────────────────
+# Used by safe_apply when AST fails. These are the original regex implementations.
+
+def _regex_B201(code: str) -> tuple[str, int]:
+    """Pure regex fallback for B201."""
+    original = code
+    code = re.sub(
+        r'(app\.run\([^)]*?)debug\s*=\s*True([^)]*?\))',
+        lambda m: m.group(1) + "debug=False" + m.group(2),
+        code
+    )
+    code = re.sub(
+        r'app\.run\(\s*debug\s*=\s*True\s*\)',
+        "app.run(debug=False, host='127.0.0.1', "
+        "port=int(os.environ.get('PORT', 5000)))",
+        code
+    )
+    if "app.run(" in code and "import os" not in code and "os.environ" in code:
+        code = "import os\n" + code
+    fixes = 0 if code == original else code.count("debug=False")
+    return code, fixes
+
+
+def _regex_B602(code: str) -> tuple[str, int]:
+    """Pure regex fallback for B602."""
+    original = code
+    fixes = 0
+    if re.search(r'subprocess\.\w+\([^)]*shell\s*=\s*True', code):
+        code = re.sub(r'shell\s*=\s*True', 'shell=False', code)
+        fixes = 1
+    return code, fixes
+
+
+def _regex_B105(code: str) -> tuple[str, int]:
+    """Pure regex fallback for B105."""
+    original = code
+    fixes = 0
+    patterns = [
+        (r"(SECRET_KEY\s*=\s*)['\"][^'\"]{3,}['\"]",
+         r"\1os.environ.get('FLASK_SECRET_KEY')"),
+        (r"(app\.secret_key\s*=\s*)['\"][^'\"]{3,}['\"]",
+         r"\1os.environ.get('FLASK_SECRET_KEY')"),
+        (r"(MAIL_PASSWORD\s*=\s*)['\"][^'\"]{3,}['\"]",
+         r"\1os.environ.get('MAIL_PASSWORD')"),
+        (r"(SECURITY_PASSWORD_SALT\s*=\s*)['\"][^'\"]{3,}['\"]",
+         r"\1os.environ.get('SECURITY_PASSWORD_SALT')"),
+    ]
+    for pattern, replacement in patterns:
+        new_code = re.sub(pattern, replacement, code)
+        if new_code != code:
+            fixes += 1
+            code = new_code
+    if 'os.environ.get' in code and 'import os' not in code:
+        code = "import os\n" + code
+    return code, fixes
+
+
 # ── BANDIT RULES ──────────────────────────────────────────────────────────────
 class _DebugFixer(ast.NodeTransformer):
     """

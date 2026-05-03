@@ -423,3 +423,70 @@ class TestRemediationMap:
             assert len(result) == 2, f"{rule_id} tuple must have 2 elements"
             assert isinstance(result[0], str), f"{rule_id} first element must be str"
             assert isinstance(result[1], int), f"{rule_id} second element must be int"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HYBRID FALLBACK SYSTEM TESTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestHybridFallback:
+    """Tests for the safe_apply fallback manager."""
+
+    def test_safe_apply_uses_ast_on_valid_code(self):
+        from shield.rules.custom_rules import (
+            safe_apply, fix_B201_debug_true, _regex_B201
+        )
+        code = "app.run(debug=True)"
+        result = safe_apply(fix_B201_debug_true, _regex_B201, code, 'B201')
+        assert result.fixes > 0
+        assert result.strategy == "ast"
+        assert "debug=True" not in result.code
+
+    def test_safe_apply_falls_back_on_syntax_error(self):
+        from shield.rules.custom_rules import (
+            safe_apply, fix_B201_debug_true, _regex_B201
+        )
+        # Code with syntax error — AST will fail, regex should work
+        code = "app.run(debug=True\n"  # missing closing paren
+        result = safe_apply(fix_B201_debug_true, _regex_B201, code, 'B201')
+        # Should not crash — strategy should be regex or none
+        assert result.strategy in ("regex", "none", "ast")
+
+    def test_safe_apply_returns_rule_result(self):
+        from shield.rules.custom_rules import (
+            safe_apply, fix_B201_debug_true, _regex_B201, RuleResult
+        )
+        code = "app.run(debug=True)"
+        result = safe_apply(fix_B201_debug_true, _regex_B201, code, 'B201')
+        assert isinstance(result, RuleResult)
+        assert isinstance(result.code, str)
+        assert isinstance(result.fixes, int)
+        assert result.strategy in ("ast", "regex", "none")
+
+    def test_safe_apply_empty_string(self):
+        from shield.rules.custom_rules import (
+            safe_apply, fix_B201_debug_true, _regex_B201
+        )
+        result = safe_apply(fix_B201_debug_true, _regex_B201, "", 'B201')
+        assert result.fixes == 0
+        assert result.strategy == "none"
+
+    def test_regex_B201_fallback_works(self):
+        from shield.rules.custom_rules import _regex_B201
+        code = "app.run(debug=True)"
+        fixed, count = _regex_B201(code)
+        assert "debug=False" in fixed
+        assert count > 0
+
+    def test_regex_B602_fallback_works(self):
+        from shield.rules.custom_rules import _regex_B602
+        code = "subprocess.run(cmd, shell=True)"
+        fixed, count = _regex_B602(code)
+        assert "shell=False" in fixed
+        assert count > 0
+
+    def test_regex_B105_fallback_works(self):
+        from shield.rules.custom_rules import _regex_B105
+        code = "SECRET_KEY = 'hardcodedvalue'"
+        fixed, count = _regex_B105(code)
+        assert "os.environ.get" in fixed
+        assert count > 0

@@ -42,7 +42,9 @@ BANNER = f"""
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def print_banner():
-    print(BANNER)
+    import sys
+    if sys.stdout.isatty():
+        print(BANNER)
 
 def success(msg): print(f"{Fore.GREEN}  ✅  {msg}{Style.RESET_ALL}")
 def warning(msg): print(f"{Fore.YELLOW}  ⚠️   {msg}{Style.RESET_ALL}")

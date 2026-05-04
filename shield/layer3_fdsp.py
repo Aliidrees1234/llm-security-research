@@ -134,7 +134,7 @@ def count_lines(directory: str) -> int:
 
 # ── FDSP MAIN LOOP ────────────────────────────────────────────────────────────
 
-def fdsp_loop(corpus_dir: str, output_dir: str, max_k: int = 3) -> dict:
+def fdsp_loop(corpus_dir: str, output_dir: str, max_k: int = 3, inplace: bool = False) -> dict:
     """
     Run FDSP loop on corpus:
       K=0: baseline scan
@@ -157,10 +157,14 @@ def fdsp_loop(corpus_dir: str, output_dir: str, max_k: int = 3) -> dict:
     }
     
     # Work in a temp directory so we don't modify originals
-    work_dir = output_path / 'working_copy'
-    if work_dir.exists():
-        shutil.rmtree(work_dir)
-    shutil.copytree(corpus_path, work_dir)
+    if inplace:
+        work_dir = corpus_path
+        print("  ⚠️  INPLACE MODE — original files will be modified")
+    else:
+        work_dir = output_path / 'working_copy'
+        if work_dir.exists():
+            shutil.rmtree(work_dir)
+        shutil.copytree(corpus_path, work_dir)
     
     # ── K=0: Baseline ─────────────────────────────────────────────────────────
     print(f"\n  K=0 — Baseline scan...")

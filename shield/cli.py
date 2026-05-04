@@ -162,8 +162,9 @@ def cmd_scan(args):
                 'semgrep', '--config=p/nodejs',
                 '--json', str(path)
             ]
-            result = subprocess.run( # nosec B603 — cmd is hardcoded semgrep command
-                cmd, capture_output=True, text=True, timeout=60
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=60,
+                encoding='utf-8', errors='replace'
             )
             output = result.stdout
             json_start = output.find('{')
@@ -266,10 +267,11 @@ def cmd_fix(args):
 
 def cmd_version(args):
     print_banner()
-    info("SHIELD Security v0.1.0")
+    info("SHIELD Security v0.2.0")
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
+    info("Engine: AST-primary + regex fallback — 11 rules — 58 tests")
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 

@@ -392,6 +392,36 @@ class TestB105ASTRobustness:
         assert "supersecretvalue123" not in fixed
         assert "os.environ.get" in fixed
 
+class TestB324ASTRobustness:
+    """Tests that prove AST catches MD5/SHA1 by structure."""
+
+    def test_fixes_md5_with_complex_arg(self):
+        code = "import hashlib\nhash = hashlib.md5(data.encode('utf-8'))"
+        fixed, count = fix_B324_weak_hash(code)
+        assert "hashlib.md5" not in fixed
+        assert "hashlib.sha256" in fixed
+        assert "usedforsecurity=False" in fixed
+        assert count > 0
+
+    def test_fixes_sha1_with_complex_arg(self):
+        code = "import hashlib\nhash = hashlib.sha1(name.encode())"
+        fixed, count = fix_B324_weak_hash(code)
+        assert "hashlib.sha1" not in fixed
+        assert "hashlib.sha256" in fixed
+        assert count > 0
+
+    def test_no_false_positive_sha256(self):
+        code = "import hashlib\nhash = hashlib.sha256(data)"
+        fixed, count = fix_B324_weak_hash(code)
+        assert count == 0
+
+    def test_regex_B324_fallback_works(self):
+        from shield.rules.custom_rules import _regex_B324
+        code = "hashlib.md5(data)"
+        fixed, count = _regex_B324(code)
+        assert "sha256" in fixed
+        assert count > 0
+        
 # ══════════════════════════════════════════════════════════════════════════════
 # REMEDIATION MAP — structural tests
 # ══════════════════════════════════════════════════════════════════════════════

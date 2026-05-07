@@ -35,7 +35,7 @@ BANNER = f"""
 ║   {Fore.WHITE}╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝{Fore.WHITE}               ║
 ║                                                              ║
 ║   {Fore.WHITE}Security Layer for LLM-assisted Development{Fore.WHITE}              ║
-║   {Fore.WHITE}v0.1.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
+║   {Fore.WHITE}v0.2.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}"""
 
@@ -164,7 +164,7 @@ def cmd_scan(args):
                 'semgrep', '--config=p/nodejs',
                 '--json', str(path)
             ]
-            result = subprocess.run(
+            result = subprocess.run( # nosec B603 — cmd is hardcoded semgrep command, no user input
                 cmd, capture_output=True, text=True, timeout=60,
                 encoding='utf-8', errors='replace'
             )

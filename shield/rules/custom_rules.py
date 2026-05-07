@@ -145,6 +145,25 @@ def _regex_B105(code: str) -> tuple[str, int]:
         code = "import os\n" + code
     return code, fixes
 
+def _regex_B324(code: str) -> tuple[str, int]:
+    """Pure regex fallback for B324."""
+    original = code
+    fixes = 0
+    if 'hashlib.md5(' in code:
+        code = re.sub(
+            r'hashlib\.md5\(([^)]+)\)',
+            r'hashlib.sha256(\1, usedforsecurity=False)',
+            code
+        )
+        fixes += 1
+    if 'hashlib.sha1(' in code:
+        code = re.sub(
+            r'hashlib\.sha1\(([^)]+)\)',
+            r'hashlib.sha256(\1, usedforsecurity=False)',
+            code
+        )
+        fixes += 1
+    return code, fixes
 
 # ── BANDIT RULES ──────────────────────────────────────────────────────────────
 class _DebugFixer(ast.NodeTransformer):
@@ -461,33 +480,85 @@ def fix_B105_B106_hardcoded(code: str) -> tuple[str, int]:
             code = "import os\n" + code
         return code, fixes
 
+class _WeakHashFixer(ast.NodeTransformer):
+    """
+    Walks AST looking for hashlib.md5() or hashlib.sha1() calls.
+    Replaces with hashlib.sha256(..., usedforsecurity=False).
+
+    Catches:
+      hashlib.md5(data)
+      hashlib.sha1(data)
+      hashlib.md5(data.encode())
+    """
+    WEAK_HASHES = {'md5', 'sha1'}
+
+    def __init__(self):
+        self.fixes = 0
+
+    def visit_Call(self, node):
+        # Is this a method call on hashlib?
+        if isinstance(node.func, ast.Attribute):
+            if node.func.attr in self.WEAK_HASHES:
+                # Is the object named hashlib?
+                if (isinstance(node.func.value, ast.Name) and
+                        node.func.value.id == 'hashlib'):
+                    # Replace the method name with sha256
+                    node.func.attr = 'sha256'
+                    # Add usedforsecurity=False keyword argument
+                    node.keywords.append(
+                        ast.keyword(
+                            arg='usedforsecurity',
+                            value=ast.Constant(value=False)
+                        )
+                    )
+                    self.fixes += 1
+        return self.generic_visit(node)
 
 def fix_B324_weak_hash(code: str) -> tuple[str, int]:
     """
     B324 — hashlib_new_insecure_functions
     Severity: HIGH | CWE-327
-    Replace MD5/SHA1 with SHA256 (usedforsecurity=False for non-auth uses).
+    Replace MD5/SHA1 with SHA256 (usedforsecurity=False).
+
+    Strategy:
+      1. Try AST fix — finds hashlib calls by structure
+      2. If AST fails — fall back to regex
     """
-    original = code
-    fixes = 0
+    if not code.strip():
+        return code, 0
 
-    if 'hashlib.md5(' in code:
-        code = re.sub(
-            r'hashlib\.md5\(([^)]+)\)',
-            r'hashlib.sha256(\1, usedforsecurity=False)',
-            code
-        )
-        fixes += 1
+    # ── AST approach (primary) ─────────────────────────────────────────────
+    try:
+        tree = ast.parse(code)
+        fixer = _WeakHashFixer()
+        new_tree = fixer.visit(tree)
+        ast.fix_missing_locations(new_tree)
 
-    if 'hashlib.sha1(' in code:
-        code = re.sub(
-            r'hashlib\.sha1\(([^)]+)\)',
-            r'hashlib.sha256(\1, usedforsecurity=False)',
-            code
-        )
-        fixes += 1
+        if fixer.fixes > 0:
+            fixed_code = astor.to_source(new_tree)
+            return fixed_code, fixer.fixes
 
-    return code, fixes
+        return code, 0
+
+    # ── Regex fallback ─────────────────────────────────────────────────────
+    except SyntaxError:
+        original = code
+        fixes = 0
+        if 'hashlib.md5(' in code:
+            code = re.sub(
+                r'hashlib\.md5\(([^)]+)\)',
+                r'hashlib.sha256(\1, usedforsecurity=False)',
+                code
+            )
+            fixes += 1
+        if 'hashlib.sha1(' in code:
+            code = re.sub(
+                r'hashlib\.sha1\(([^)]+)\)',
+                r'hashlib.sha256(\1, usedforsecurity=False)',
+                code
+            )
+            fixes += 1
+        return code, fixes
 
 
 def fix_B104_bind_all(code: str) -> tuple[str, int]:

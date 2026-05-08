@@ -422,6 +422,39 @@ class TestB324ASTRobustness:
         assert "sha256" in fixed
         assert count > 0
         
+class TestB104ASTRobustness:
+    """Tests that prove AST catches host='0.0.0.0' by structure."""
+
+    def test_fixes_bind_all_with_other_args(self):
+        code = "app.run(debug=False, host='0.0.0.0', port=5000)"
+        fixed, count = fix_B104_bind_all(code)
+        assert "0.0.0.0" not in fixed
+        assert "os.environ.get" in fixed
+        assert count > 0
+
+    def test_fixes_socketio_variant(self):
+        code = "socketio.run(app, host='0.0.0.0')"
+        fixed, count = fix_B104_bind_all(code)
+        assert "0.0.0.0" not in fixed
+        assert count > 0
+
+    def test_adds_os_import(self):
+        code = "app.run(host='0.0.0.0')"
+        fixed, count = fix_B104_bind_all(code)
+        assert "import os" in fixed
+
+    def test_no_false_positive_localhost(self):
+        code = "app.run(host='127.0.0.1')"
+        fixed, count = fix_B104_bind_all(code)
+        assert count == 0
+
+    def test_regex_B104_fallback_works(self):
+        from shield.rules.custom_rules import _regex_B104
+        code = "app.run(host='0.0.0.0')"
+        fixed, count = _regex_B104(code)
+        assert "0.0.0.0" not in fixed
+        assert count > 0
+        
 # ══════════════════════════════════════════════════════════════════════════════
 # REMEDIATION MAP — structural tests
 # ══════════════════════════════════════════════════════════════════════════════

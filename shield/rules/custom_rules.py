@@ -165,6 +165,19 @@ def _regex_B324(code: str) -> tuple[str, int]:
         fixes += 1
     return code, fixes
 
+def _regex_B104(code: str) -> tuple[str, int]:
+    """Pure regex fallback for B104."""
+    original = code
+    code = re.sub(
+        r"host\s*=\s*['\"]0\.0\.0\.0['\"]",
+        "host=os.environ.get('HOST', '127.0.0.1')",
+        code
+    )
+    if 'os.environ.get' in code and 'import os' not in code:
+        code = "import os\n" + code
+    fixes = 0 if code == original else 1
+    return code, fixes
+
 # ── BANDIT RULES ──────────────────────────────────────────────────────────────
 class _DebugFixer(ast.NodeTransformer):
     """
@@ -560,25 +573,89 @@ def fix_B324_weak_hash(code: str) -> tuple[str, int]:
             fixes += 1
         return code, fixes
 
+class _BindAllFixer(ast.NodeTransformer):
+    """
+    Walks AST looking for host='0.0.0.0' in any function call.
+    Replaces with host=os.environ.get('HOST', '127.0.0.1').
+
+    Catches:
+      app.run(host='0.0.0.0')
+      app.run(debug=False, host='0.0.0.0', port=5000)
+      socketio.run(app, host='0.0.0.0')
+    """
+    def __init__(self):
+        self.fixes = 0
+        self.needs_os_import = False
+
+    def _make_environ_call(self) -> ast.Call:
+        """Build: os.environ.get('HOST', '127.0.0.1')"""
+        return ast.Call(
+            func=ast.Attribute(
+                value=ast.Attribute(
+                    value=ast.Name(id='os', ctx=ast.Load()),
+                    attr='environ',
+                    ctx=ast.Load()
+                ),
+                attr='get',
+                ctx=ast.Load()
+            ),
+            args=[
+                ast.Constant(value='HOST'),
+                ast.Constant(value='127.0.0.1')
+            ],
+            keywords=[]
+        )
+
+    def visit_Call(self, node):
+        for keyword in node.keywords:
+            if keyword.arg == 'host':
+                if (isinstance(keyword.value, ast.Constant) and
+                        keyword.value.value == '0.0.0.0'):  # nosec B104 — checking for pattern, not binding
+                    keyword.value = self._make_environ_call()
+                    self.fixes += 1
+                    self.needs_os_import = True
+        return self.generic_visit(node)
 
 def fix_B104_bind_all(code: str) -> tuple[str, int]:
     """
     B104 — hardcoded_bind_all_interfaces
     Severity: MEDIUM | CWE-605
-    Replace host='0.0.0.0' with environment variable.
+    Replace host='0.0.0.0' with os.environ.get('HOST', '127.0.0.1').
+
+    Strategy:
+      1. Try AST fix — finds host keyword by structure
+      2. If AST fails — fall back to regex
     """
-    original = code
+    if not code.strip():
+        return code, 0
 
-    code = re.sub(
-        r"host\s*=\s*['\"]0\.0\.0\.0['\"]",
-        "host=os.environ.get('HOST', '127.0.0.1')",
-        code
-    )
-    if 'os.environ.get' in code and 'import os' not in code:
-        code = "import os\n" + code
+    # ── AST approach (primary) ─────────────────────────────────────────────
+    try:
+        tree = ast.parse(code)
+        fixer = _BindAllFixer()
+        new_tree = fixer.visit(tree)
+        ast.fix_missing_locations(new_tree)
 
-    fixes = 0 if code == original else 1
-    return code, fixes
+        if fixer.fixes > 0:
+            fixed_code = astor.to_source(new_tree)
+            if fixer.needs_os_import and 'import os' not in fixed_code:
+                fixed_code = "import os\n" + fixed_code
+            return fixed_code, fixer.fixes
+
+        return code, 0
+
+    # ── Regex fallback ─────────────────────────────────────────────────────
+    except SyntaxError:
+        original = code
+        code = re.sub(
+            r"host\s*=\s*['\"]0\.0\.0\.0['\"]",
+            "host=os.environ.get('HOST', '127.0.0.1')",
+            code
+        )
+        if 'os.environ.get' in code and 'import os' not in code:
+            code = "import os\n" + code
+        fixes = 0 if code == original else 1
+        return code, fixes
 
 
 def fix_B108_tmp_dir(code: str) -> tuple[str, int]:

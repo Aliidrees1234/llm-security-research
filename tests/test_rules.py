@@ -454,7 +454,45 @@ class TestB104ASTRobustness:
         fixed, count = _regex_B104(code)
         assert "0.0.0.0" not in fixed
         assert count > 0
-        
+
+class TestB108ASTRobustness:
+    """Tests that prove AST catches /tmp paths by structure."""
+
+    def test_fixes_tmp_uploads(self):
+        code = "UPLOAD_FOLDER = '/tmp/uploads'"
+        fixed, count = fix_B108_tmp_dir(code)
+        assert "/tmp" not in fixed
+        assert "os.environ.get" in fixed
+        assert count > 0
+
+    def test_fixes_bare_tmp(self):
+        code = "path = '/tmp'"
+        fixed, count = fix_B108_tmp_dir(code)
+        assert "/tmp'" not in fixed
+        assert count > 0
+
+    def test_adds_os_import(self):
+        code = "UPLOAD_FOLDER = '/tmp/uploads'"
+        fixed, count = fix_B108_tmp_dir(code)
+        assert "import os" in fixed
+
+    def test_no_false_positive_safe_path(self):
+        code = "UPLOAD_FOLDER = '/var/app/uploads'"
+        fixed, count = fix_B108_tmp_dir(code)
+        assert count == 0
+
+    def test_no_false_positive_unrelated(self):
+        code = "message = 'this is temporary'"
+        fixed, count = fix_B108_tmp_dir(code)
+        assert count == 0
+
+    def test_regex_B108_fallback_works(self):
+        from shield.rules.custom_rules import _regex_B108
+        code = "UPLOAD_FOLDER = '/tmp/uploads'"
+        fixed, count = _regex_B108(code)
+        assert "/tmp" not in fixed
+        assert count > 0
+             
 # ══════════════════════════════════════════════════════════════════════════════
 # REMEDIATION MAP — structural tests
 # ══════════════════════════════════════════════════════════════════════════════

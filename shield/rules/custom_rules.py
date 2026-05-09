@@ -178,6 +178,17 @@ def _regex_B104(code: str) -> tuple[str, int]:
     fixes = 0 if code == original else 1
     return code, fixes
 
+def _regex_B108(code: str) -> tuple[str, int]:
+    """Pure regex fallback for B108."""
+    original = code
+    code = re.sub(
+        r"""['"](/tmp/[^'"]*|/tmp)['"]""",
+        "os.environ.get('UPLOAD_FOLDER', '/var/app/uploads')",
+        code
+    )
+    fixes = 0 if code == original else 1
+    return code, fixes
+
 # ── BANDIT RULES ──────────────────────────────────────────────────────────────
 class _DebugFixer(ast.NodeTransformer):
     """
@@ -657,29 +668,95 @@ def fix_B104_bind_all(code: str) -> tuple[str, int]:
         fixes = 0 if code == original else 1
         return code, fixes
 
+class _TmpDirFixer(ast.NodeTransformer):
+    """
+    Walks AST looking for string assignments containing /tmp.
+    Replaces with os.environ.get('UPLOAD_FOLDER', '/var/app/uploads').
+
+    Catches:
+      UPLOAD_FOLDER = '/tmp/uploads'
+      app.config['UPLOAD_FOLDER'] = '/tmp'
+      path = '/tmp/files'
+    """
+    def __init__(self):
+        self.fixes = 0
+        self.needs_os_import = False
+
+    def _is_tmp_path(self, value) -> bool:
+        """Check if a constant string starts with /tmp."""
+        return (isinstance(value, ast.Constant) and
+                isinstance(value.value, str) and
+                value.value.startswith('/tmp')) # nosec B108 — checking for pattern, not using /tmp
+
+    def _make_environ_call(self) -> ast.Call:
+        """Build: os.environ.get('UPLOAD_FOLDER', '/var/app/uploads')"""
+        return ast.Call(
+            func=ast.Attribute(
+                value=ast.Attribute(
+                    value=ast.Name(id='os', ctx=ast.Load()),
+                    attr='environ',
+                    ctx=ast.Load()
+                ),
+                attr='get',
+                ctx=ast.Load()
+            ),
+            args=[
+                ast.Constant(value='UPLOAD_FOLDER'),
+                ast.Constant(value='/var/app/uploads')
+            ],
+            keywords=[]
+        )
+
+    def visit_Assign(self, node):
+        """Handle: UPLOAD_FOLDER = '/tmp/...'"""
+        if self._is_tmp_path(node.value):
+            node.value = self._make_environ_call()
+            self.fixes += 1
+            self.needs_os_import = True
+        return self.generic_visit(node)
+
+    def visit_Subscript(self, node):
+        """Handle: app.config['UPLOAD_FOLDER'] = '/tmp/...'"""
+        return self.generic_visit(node)
 
 def fix_B108_tmp_dir(code: str) -> tuple[str, int]:
     """
     B108 — hardcoded_tmp_directory
     Severity: MEDIUM | CWE-377
-    Replace /tmp hardcoded path with environment variable.
+    Replace /tmp hardcoded paths with environment variable.
+
+    Strategy:
+      1. Try AST fix — finds /tmp string assignments by structure
+      2. If AST fails — fall back to regex
     """
-    original = code
+    if not code.strip():
+        return code, 0
 
-    code = re.sub(
-        r"""os\.environ\.get\(['"]\w+['"]\s*,\s*['"]/tmp[^'"]*['"]\)""",
-        "os.environ.get('UPLOAD_FOLDER')  "
-        "# nosec B108 — no /tmp default, set UPLOAD_FOLDER env var",
-        code
-    )
-    code = re.sub(
-        r"""['"](/tmp/[^'"]*|\\tmp\\[^'"]*)['"]""",
-        "os.environ.get('UPLOAD_FOLDER', '/var/app/uploads')",
-        code
-    )
+    # ── AST approach (primary) ─────────────────────────────────────────────
+    try:
+        tree = ast.parse(code)
+        fixer = _TmpDirFixer()
+        new_tree = fixer.visit(tree)
+        ast.fix_missing_locations(new_tree)
 
-    fixes = 0 if code == original else 1
-    return code, fixes
+        if fixer.fixes > 0:
+            fixed_code = astor.to_source(new_tree)
+            if fixer.needs_os_import and 'import os' not in fixed_code:
+                fixed_code = "import os\n" + fixed_code
+            return fixed_code, fixer.fixes
+
+        return code, 0
+
+    # ── Regex fallback ─────────────────────────────────────────────────────
+    except SyntaxError:
+        original = code
+        code = re.sub(
+            r"""['"](/tmp/[^'"]*|/tmp)['"]""",
+            "os.environ.get('UPLOAD_FOLDER', '/var/app/uploads')",
+            code
+        )
+        fixes = 0 if code == original else 1
+        return code, fixes
 
 
 def fix_B311_random(code: str) -> tuple[str, int]:

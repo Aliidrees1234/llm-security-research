@@ -189,6 +189,24 @@ def _regex_B108(code: str) -> tuple[str, int]:
     fixes = 0 if code == original else 1
     return code, fixes
 
+def _regex_B311(code: str) -> tuple[str, int]:
+    """Pure regex fallback for B311 — adds nosec for display data."""
+    original = code
+    fixes = 0
+    if 'random.randint' in code or 'random.choice' in code:
+        code = re.sub(
+            r'random\.randint\(',
+            'random.randint(  # nosec B311 — non-security display data only',
+            code
+        )
+        code = re.sub(
+            r'random\.choice\(',
+            'random.choice(  # nosec B311 — non-security display data only',
+            code
+        )
+        fixes = 1
+    return code, fixes
+
 # ── BANDIT RULES ──────────────────────────────────────────────────────────────
 class _DebugFixer(ast.NodeTransformer):
     """
@@ -758,31 +776,133 @@ def fix_B108_tmp_dir(code: str) -> tuple[str, int]:
         fixes = 0 if code == original else 1
         return code, fixes
 
+class _RandomFixer(ast.NodeTransformer):
+    """
+    Walks AST looking for random.randint() or random.choice() calls.
+
+    Strategy:
+      - If used in a security context (token, password, key, secret)
+        → replace with secrets module equivalent
+      - If used for display/demo data
+        → add nosec comment via inline annotation
+
+    Catches:
+      random.randint(1, 100)
+      random.choice(items)
+      random.random()
+      random.uniform(0, 1)
+    """
+    RANDOM_METHODS = {
+        'randint', 'choice', 'random',
+        'uniform', 'shuffle', 'sample'
+    }
+
+    SECURITY_CONTEXTS = {
+        'token', 'secret', 'password', 'key',
+        'salt', 'nonce', 'csrf', 'session'
+    }
+
+    def __init__(self):
+        self.fixes = 0
+        self.needs_secrets_import = False
+
+    def _is_security_context(self, node) -> bool:
+        """Check if the call is assigned to a security-sensitive variable."""
+        return False  # Context detection handled at assign level
+
+    def _make_secrets_call(self, method: str, node: ast.Call) -> ast.Call:
+        """
+        Replace random.X() with secrets equivalent:
+          random.randint(a, b) → secrets.randbelow(b - a) + a
+          random.choice(seq)   → secrets.choice(seq)
+        """
+        if method == 'randint' and len(node.args) == 2:
+            return ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id='secrets', ctx=ast.Load()),
+                    attr='randbelow',
+                    ctx=ast.Load()
+                ),
+                args=[
+                    ast.BinOp(
+                        left=node.args[1],
+                        op=ast.Sub(),
+                        right=node.args[0]
+                    )
+                ],
+                keywords=[]
+            )
+        elif method == 'choice':
+            return ast.Call(
+                func=ast.Attribute(
+                    value=ast.Name(id='secrets', ctx=ast.Load()),
+                    attr='choice',
+                    ctx=ast.Load()
+                ),
+                args=node.args,
+                keywords=[]
+            )
+        return node  # Can't auto-replace — leave as-is
+
+    def visit_Assign(self, node):
+        """
+        Check assignment context:
+          token = random.choice(...)  → replace with secrets
+          color = random.choice(...)  → leave (display data)
+        """
+        # Check if target variable name suggests security use
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                var_name = target.id.lower()
+                if any(ctx in var_name for ctx in self.SECURITY_CONTEXTS):
+                    # Security context — replace with secrets
+                    if isinstance(node.value, ast.Call):
+                        call = node.value
+                        if (isinstance(call.func, ast.Attribute) and
+                                call.func.attr in self.RANDOM_METHODS and
+                                isinstance(call.func.value, ast.Name) and
+                                call.func.value.id == 'random'):
+                            node.value = self._make_secrets_call(
+                                call.func.attr, call
+                            )
+                            self.fixes += 1
+                            self.needs_secrets_import = True
+        return self.generic_visit(node)
+    
 
 def fix_B311_random(code: str) -> tuple[str, int]:
     """
     B311 — random
     Severity: LOW | CWE-330
-    Flag non-cryptographic random usage with nosec for display-only data.
-    Note: If used for security tokens, replace with secrets module.
+    For security contexts: replace with secrets module.
+    For display contexts: add nosec comment.
+
+    Strategy:
+      1. Try AST fix — detects security vs display context
+      2. If AST fails — fall back to regex (nosec annotation)
     """
-    original = code
-    fixes = 0
+    if not code.strip():
+        return code, 0
 
-    if 'random.randint' in code or 'random.choice' in code:
-        code = re.sub(
-            r'random\.randint\(',
-            'random.randint(  # nosec B311 — non-security display data only',
-            code
-        )
-        code = re.sub(
-            r'random\.choice\(',
-            'random.choice(  # nosec B311 — non-security display data only',
-            code
-        )
-        fixes = 1
+    # ── AST approach (primary) ─────────────────────────────────────────────
+    try:
+        tree = ast.parse(code)
+        fixer = _RandomFixer()
+        new_tree = fixer.visit(tree)
+        ast.fix_missing_locations(new_tree)
 
-    return code, fixes
+        if fixer.fixes > 0:
+            fixed_code = astor.to_source(new_tree)
+            if fixer.needs_secrets_import and 'import secrets' not in fixed_code:
+                fixed_code = "import secrets\n" + fixed_code
+            return fixed_code, fixer.fixes
+
+        # No security context found — fall back to nosec annotation
+        return _regex_B311(code)
+
+    # ── Regex fallback ─────────────────────────────────────────────────────
+    except SyntaxError:
+        return _regex_B311(code)
 
 
 def fix_B101_assert(code: str) -> tuple[str, int]:

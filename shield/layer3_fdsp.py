@@ -38,8 +38,8 @@ def apply_all_fixes(code: str) -> tuple[str, dict]:
     """
     from shield.rules.custom_rules import (
         REMEDIATION_MAP, safe_apply,
-        _regex_B201, _regex_B602, _regex_B105, _regex_B324, _regex_B104, _regex_B108,
-        fix_B201_debug_true, fix_B602_shell_true, fix_B105_B106_hardcoded, fix_B324_weak_hash, fix_B104_bind_all, fix_B108_tmp_dir
+        _regex_B201, _regex_B602, _regex_B105, _regex_B324, _regex_B104, _regex_B108, _regex_B311,
+        fix_B201_debug_true, fix_B602_shell_true, fix_B105_B106_hardcoded, fix_B324_weak_hash, fix_B104_bind_all, fix_B108_tmp_dir, fix_B311_random
         
     )
 
@@ -54,6 +54,7 @@ def apply_all_fixes(code: str) -> tuple[str, dict]:
         'B324': (fix_B324_weak_hash, _regex_B324),
         'B104': (fix_B104_bind_all, _regex_B104),
         'B108': (fix_B108_tmp_dir, _regex_B108),
+        'B311': (fix_B311_random, _regex_B311)
     }
 
     for rule_id, (ast_fn, regex_fn) in ast_rules.items():

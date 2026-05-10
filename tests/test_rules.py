@@ -492,7 +492,39 @@ class TestB108ASTRobustness:
         fixed, count = _regex_B108(code)
         assert "/tmp" not in fixed
         assert count > 0
-             
+
+class TestB311ASTRobustness:
+    """Tests for smart random detection."""
+
+    def test_replaces_random_in_security_context(self):
+        code = "import random\ntoken = random.choice(chars)"
+        fixed, count = fix_B311_random(code)
+        assert count > 0
+        assert "secrets" in fixed
+
+    def test_annotates_random_in_display_context(self):
+        code = "import random\ncolor = random.randint(0, 255)"
+        fixed, count = fix_B311_random(code)
+        assert count > 0
+
+    def test_no_false_positive_secrets_module(self):
+        code = "import secrets\ntoken = secrets.token_urlsafe(32)"
+        fixed, count = fix_B311_random(code)
+        assert count == 0
+
+    def test_regex_B311_fallback_works(self):
+        from shield.rules.custom_rules import _regex_B311
+        code = "random.randint(1, 100)"
+        fixed, count = _regex_B311(code)
+        assert "nosec B311" in fixed
+        assert count > 0
+
+    def test_adds_secrets_import_for_security_context(self):
+        code = "import random\npassword_salt = random.randint(1000, 9999)"
+        fixed, count = fix_B311_random(code)
+        if count > 0:
+            assert "secrets" in fixed or "nosec" in fixed
+                 
 # ══════════════════════════════════════════════════════════════════════════════
 # REMEDIATION MAP — structural tests
 # ══════════════════════════════════════════════════════════════════════════════

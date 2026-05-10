@@ -922,85 +922,231 @@ def fix_B101_assert(code: str) -> tuple[str, int]:
 
 
 # ── CUSTOM RULES (beyond Bandit's scope) ─────────────────────────────────────
+class _WerkzeugHashFixer(ast.NodeTransformer):
+    """
+    Walks AST looking for generate_password_hash() calls.
+    Replaces with bcrypt.hashpw() — GPU-resistant hashing.
 
+    Catches:
+      generate_password_hash(password)
+      generate_password_hash(user.password)
+      generate_password_hash(form.password.data)
+    """
+    def __init__(self):
+        self.fixes = 0
+        self.needs_bcrypt_import = True
+        self.has_check_password_hash = False
+
+    def visit_Call(self, node):
+        # Direct function call: generate_password_hash(...)
+        if (isinstance(node.func, ast.Name) and
+                node.func.id == 'generate_password_hash'):
+            if node.args:
+                # Replace with bcrypt.hashpw(arg.encode('utf-8'), bcrypt.gensalt(rounds=12))
+                new_node = ast.Call(
+                    func=ast.Attribute(
+                        value=ast.Name(id='bcrypt', ctx=ast.Load()),
+                        attr='hashpw',
+                        ctx=ast.Load()
+                    ),
+                    args=[
+                        ast.Call(
+                            func=ast.Attribute(
+                                value=node.args[0],
+                                attr='encode',
+                                ctx=ast.Load()
+                            ),
+                            args=[ast.Constant(value='utf-8')],
+                            keywords=[]
+                        ),
+                        ast.Call(
+                            func=ast.Attribute(
+                                value=ast.Name(id='bcrypt', ctx=ast.Load()),
+                                attr='gensalt',
+                                ctx=ast.Load()
+                            ),
+                            args=[],
+                            keywords=[
+                                ast.keyword(
+                                    arg='rounds',
+                                    value=ast.Constant(value=12)
+                                )
+                            ]
+                        )
+                    ],
+                    keywords=[]
+                )
+                self.fixes += 1
+                return new_node
+        return self.generic_visit(node)
+
+    def visit_ImportFrom(self, node):
+        """Handle werkzeug import — keep check_password_hash if used."""
+        if node.module == 'werkzeug.security':
+            names = [alias.name for alias in node.names]
+            if 'check_password_hash' in names:
+                self.has_check_password_hash = True
+                # Keep only check_password_hash
+                node.names = [
+                    alias for alias in node.names
+                    if alias.name == 'check_password_hash'
+                ]
+                if node.names:
+                    return node
+                return None
+            elif 'generate_password_hash' in names:
+                # Remove entire import
+                return None
+        return self.generic_visit(node)
+    
 def fix_werkzeug_weak_hash(code: str) -> tuple[str, int]:
     """
     CUSTOM — werkzeug_generate_password_hash
     Severity: MEDIUM | CWE-916
-    Bandit does not flag generate_password_hash (pbkdf2) because it's not
-    plaintext. But pbkdf2 is GPU-crackable at scale. Replace with bcrypt.
+    Replace generate_password_hash (pbkdf2) with bcrypt.
 
-    Why bcrypt:
-      pbkdf2:sha256 → billions of attempts/second on GPU farm
-      bcrypt rounds=12 → thousands of attempts/second — 1000x safer
+    Strategy:
+      1. Try AST fix — replaces call by structure
+      2. If AST fails — fall back to regex
     """
-    original = code
+    if not code.strip():
+        return code, 0
 
     if 'generate_password_hash' not in code:
         return code, 0
 
-    # Add bcrypt import
+    # ── AST approach (primary) ─────────────────────────────────────────────
+    try:
+        tree = ast.parse(code)
+        fixer = _WerkzeugHashFixer()
+        new_tree = fixer.visit(tree)
+        ast.fix_missing_locations(new_tree)
+
+        if fixer.fixes > 0:
+            fixed_code = astor.to_source(new_tree)
+            if 'import bcrypt' not in fixed_code:
+                fixed_code = "import bcrypt\n" + fixed_code
+            return fixed_code, fixer.fixes
+
+        return code, 0
+
+    # ── Regex fallback ─────────────────────────────────────────────────────
+    except SyntaxError:
+        return _regex_werkzeug(code)
+
+
+def _regex_werkzeug(code: str) -> tuple[str, int]:
+    """Pure regex fallback for werkzeug weak hash."""
+    original = code
+    if 'generate_password_hash' not in code:
+        return code, 0
     if 'import bcrypt' not in code:
         code = "import bcrypt\n" + code
-
-    # Handle werkzeug import — keep check_password_hash if used
     if 'check_password_hash' in code:
         for old in [
             'from werkzeug.security import generate_password_hash, check_password_hash',
             'from werkzeug.security import check_password_hash, generate_password_hash',
         ]:
-            code = code.replace(
-                old,
-                'from werkzeug.security import check_password_hash'
-            )
+            code = code.replace(old, 'from werkzeug.security import check_password_hash')
         code = code.replace(
-            'from werkzeug.security import generate_password_hash',
-            ''
+            'from werkzeug.security import generate_password_hash', ''
         )
     else:
         code = code.replace(
-            'from werkzeug.security import generate_password_hash\n',
-            ''
+            'from werkzeug.security import generate_password_hash\n', ''
         )
-
-    # Replace the function call
     code = re.sub(
         r'generate_password_hash\(([^)]+)\)',
         r'bcrypt.hashpw(\1.encode("utf-8"), bcrypt.gensalt(rounds=12))',
         code
     )
-
     fixes = 0 if code == original else 1
     return code, fixes
 
+class _SQLFstringFixer(ast.NodeVisitor):
+    """
+    Walks AST looking for dangerous SQL patterns.
+    Detection only — SQL auto-fix is complex, flags for manual review.
+
+    Detects:
+      db.execute(f"SELECT ... {var}")     ← f-string interpolation
+      db.execute("SELECT ..." + var)      ← string concatenation
+      cursor.execute(f"INSERT ... {var}") ← any cursor execute
+    """
+    SQL_METHODS = {'execute', 'executemany', 'raw', 'query'}
+
+    def __init__(self):
+        self.findings = 0
+
+    def _is_fstring(self, node) -> bool:
+        """Check if node is an f-string (JoinedStr)."""
+        return isinstance(node, ast.JoinedStr)
+
+    def _is_concatenation(self, node) -> bool:
+        """Check if node is string concatenation with +."""
+        return (isinstance(node, ast.BinOp) and
+                isinstance(node.op, ast.Add))
+
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Attribute):
+            if node.func.attr in self.SQL_METHODS:
+                if node.args:
+                    arg = node.args[0]
+                    if self._is_fstring(arg):
+                        self.findings += 1
+                    elif self._is_concatenation(arg):
+                        self.findings += 1
+        self.generic_visit(node)
 
 def fix_sql_fstring(code: str) -> tuple[str, int]:
     """
     CUSTOM — sql_fstring_injection
     Severity: HIGH | CWE-89
-    Bandit catches some SQL injection but misses f-string patterns.
-    Detects and flags dangerous f-string SQL construction.
-    Note: Auto-fix for SQL is complex — flags for manual review.
+    Detect SQL injection via f-strings and concatenation.
+    Flags for manual review — auto-fix is too risky for SQL.
+
+    Strategy:
+      1. AST detection — finds dangerous patterns by structure
+      2. Adds inline warning comment for developer
+      3. Regex fallback for syntax errors
     """
+    if not code.strip():
+        return code, 0
+
+    # ── AST detection (primary) ────────────────────────────────────────────
+    try:
+        tree = ast.parse(code)
+        detector = _SQLFstringFixer()
+        detector.visit(tree)
+
+        if detector.findings > 0:
+            # Add warning comment — don't auto-fix SQL (too risky)
+            warning = (
+                "# SHIELD WARNING: SQL injection risk detected below\n"
+                "# Replace f-strings/concatenation with parameterized queries:\n"
+                "# db.execute('SELECT * FROM t WHERE id = ?', (user_id,))\n"
+            )
+            return warning + code, detector.findings
+
+        return code, 0
+
+    # ── Regex fallback ─────────────────────────────────────────────────────
+    except SyntaxError:
+        return _regex_sql(code)
+
+
+def _regex_sql(code: str) -> tuple[str, int]:
+    """Pure regex fallback for SQL fstring detection."""
     original = code
     fixes = 0
-
-    dangerous_patterns = [
+    patterns = [
         r'execute\(f["\']',
         r'execute\(.*\+.*\)',
         r'query\s*=\s*f["\'].*SELECT',
     ]
-
-    for pattern in dangerous_patterns:
+    for pattern in patterns:
         if re.search(pattern, code, re.IGNORECASE):
-            code = re.sub(
-                pattern,
-                lambda m: m.group(0) + "  # SHIELD WARNING: SQL injection risk — use parameterized queries",
-                code,
-                flags=re.IGNORECASE
-            )
             fixes += 1
-
     return code, fixes
 
 

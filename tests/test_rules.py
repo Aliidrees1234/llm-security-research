@@ -524,7 +524,93 @@ class TestB311ASTRobustness:
         fixed, count = fix_B311_random(code)
         if count > 0:
             assert "secrets" in fixed or "nosec" in fixed
-                 
+
+class TestWerkzeugASTRobustness:
+    """Tests for AST-based werkzeug hash replacement."""
+
+    def test_fixes_with_variable_arg(self):
+        code = (
+            "from werkzeug.security import generate_password_hash\n"
+            "hash = generate_password_hash(user.password)\n"
+        )
+        fixed, count = fix_werkzeug_weak_hash(code)
+        assert "generate_password_hash" not in fixed
+        assert "bcrypt" in fixed
+        assert count > 0
+
+    def test_fixes_with_form_data(self):
+        code = (
+            "from werkzeug.security import generate_password_hash\n"
+            "hash = generate_password_hash(form.password.data)\n"
+        )
+        fixed, count = fix_werkzeug_weak_hash(code)
+        assert "generate_password_hash" not in fixed
+        assert "bcrypt" in fixed
+        assert count > 0
+
+    def test_keeps_check_password_hash(self):
+        code = (
+            "from werkzeug.security import generate_password_hash, check_password_hash\n"
+            "hash = generate_password_hash(password)\n"
+            "result = check_password_hash(hash, password)\n"
+        )
+        fixed, count = fix_werkzeug_weak_hash(code)
+        assert "check_password_hash" in fixed
+        assert "generate_password_hash" not in fixed
+
+    def test_adds_bcrypt_import(self):
+        code = (
+            "from werkzeug.security import generate_password_hash\n"
+            "hash = generate_password_hash(password)\n"
+        )
+        fixed, count = fix_werkzeug_weak_hash(code)
+        assert "import bcrypt" in fixed
+
+    def test_regex_werkzeug_fallback_works(self):
+        from shield.rules.custom_rules import _regex_werkzeug
+        code = (
+            "from werkzeug.security import generate_password_hash\n"
+            "hash = generate_password_hash(password)\n"
+        )
+        fixed, count = _regex_werkzeug(code)
+        assert "bcrypt" in fixed
+        assert count > 0
+
+class TestSQLFstringASTRobustness:
+    """Tests for AST-based SQL injection detection."""
+
+    def test_detects_fstring_in_execute(self):
+        code = 'db.execute(f"SELECT * FROM users WHERE id = {user_id}")'
+        fixed, count = fix_sql_fstring(code)
+        assert count > 0
+        assert "SHIELD WARNING" in fixed
+
+    def test_detects_concatenation_in_execute(self):
+        code = 'db.execute("SELECT * FROM users WHERE name = " + name)'
+        fixed, count = fix_sql_fstring(code)
+        assert count > 0
+
+    def test_detects_cursor_execute(self):
+        code = 'cursor.execute(f"INSERT INTO logs VALUES ({user_id})")'
+        fixed, count = fix_sql_fstring(code)
+        assert count > 0
+
+    def test_no_false_positive_parameterized(self):
+        code = "db.execute('SELECT * FROM users WHERE id = ?', (user_id,))"
+        fixed, count = fix_sql_fstring(code)
+        assert count == 0
+
+    def test_no_false_positive_safe_string(self):
+        code = 'db.execute("SELECT * FROM users")'
+        fixed, count = fix_sql_fstring(code)
+        assert count == 0
+
+    def test_regex_sql_fallback_works(self):
+        from shield.rules.custom_rules import _regex_sql
+        code = 'db.execute(f"SELECT * FROM users WHERE id = {uid}")'
+        fixed, count = _regex_sql(code)
+        assert count > 0
+
 # ══════════════════════════════════════════════════════════════════════════════
 # REMEDIATION MAP — structural tests
 # ══════════════════════════════════════════════════════════════════════════════

@@ -273,7 +273,7 @@ def cmd_version(args):
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
-    info("Engine: AST-primary + regex fallback — 11 rules — 58 tests")
+    info("Engine: Full AST engine — 11 rules — 89 tests")
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 

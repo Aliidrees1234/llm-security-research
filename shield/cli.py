@@ -35,7 +35,7 @@ BANNER = f"""
 ║   {Fore.WHITE}╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝{Fore.WHITE}               ║
 ║                                                              ║
 ║   {Fore.WHITE}Security Layer for LLM-assisted Development{Fore.WHITE}              ║
-║   {Fore.WHITE}v0.2.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
+║   {Fore.WHITE}v0.3.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}"""
 
@@ -74,11 +74,19 @@ def detect_languages(path: str) -> list[str]:
 # ── SCAN COMMAND ──────────────────────────────────────────────────────────────
 
 def cmd_scan(args):
-    """shield scan <path>"""
-    import subprocess  # nosec B404 — subprocess used to run Bandit/Semgrep with hardcoded commands only
-    import json
+    """shield scan <path> [--report report.html] [--json]"""
+    import subprocess # nosec B404 — subprocess used to run Bandit/Semgrep with hardcoded commands only
+    import json as jsonlib
+    from shield.reporter import (
+        ScanResult, Finding,
+        generate_report,
+        parse_bandit_to_result,
+        parse_semgrep_to_result
+    )
 
-    print_banner()
+    if sys.stdout.isatty():
+        print_banner()
+
     section(f"SCANNING  {args.path}")
 
     path = Path(args.path)
@@ -86,7 +94,6 @@ def cmd_scan(args):
         error(f"Path not found: {args.path}")
         sys.exit(1)
 
-    # Detect languages
     languages = detect_languages(args.path)
     if not languages:
         warning("No supported language files found.")
@@ -94,9 +101,19 @@ def cmd_scan(args):
 
     info(f"Languages detected: {', '.join(languages)}")
 
-    total_high = 0
+    # Count lines of code
+    loc = sum(
+        len(f.read_text(encoding='utf-8', errors='ignore').splitlines())
+        for f in path.rglob('*.py')
+    )
+
+    # Create scan result
+    result = ScanResult(str(args.path), loc=loc)
+    result.languages = languages
+
+    total_high   = 0
     total_medium = 0
-    total_low = 0
+    total_low    = 0
 
     # ── Python scan via Bandit ─────────────────────────────────────────────
     if 'python' in languages:
@@ -106,47 +123,49 @@ def cmd_scan(args):
             '-r', str(path),
             '-f', 'json', '-q'
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603 — cmd is hardcoded, no user input
-        output = result.stdout or result.stderr
+        res = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603
+        output = res.stdout or res.stderr
         json_start = output.find('{')
 
         if json_start >= 0:
-            data = json.loads(output[json_start:])
-            results = data.get('results', [])
-            high   = [r for r in results if r['issue_severity'] == 'HIGH']
-            medium = [r for r in results if r['issue_severity'] == 'MEDIUM']
-            low    = [r for r in results if r['issue_severity'] == 'LOW']
+            data = jsonlib.loads(output[json_start:])
+            result = parse_bandit_to_result(data, str(args.path), loc)
+            result.languages = languages
+
+            high   = result.high
+            medium = result.medium
+            low    = result.low
 
             total_high   += len(high)
             total_medium += len(medium)
             total_low    += len(low)
 
             if high:
-                for r in high:
-                    error(f"[{r['test_id']}] {r['issue_text']}")
-                    info(f"    File: {r['filename']}")
-                    info(f"    Line: {r['line_number']}")
-                    info(f"    CWE:  {r.get('issue_cwe', {}).get('id', 'N/A')}")
-                    info(f"    Code: {r.get('code', '').strip()}")
+                for f in high:
+                    error(f"[{f.rule_id}] {f.message}")
+                    info(f"    File: {f.filename}")
+                    info(f"    Line: {f.line}")
+                    info(f"    CWE:  {f.cwe}")
+                    if f.code:
+                        info(f"    Code: {f.code.strip()[:80]}")
                     print()
 
             if medium:
-                for r in medium:
-                    warning(f"[{r['test_id']}] {r['issue_text']}")
-                    info(f"    File: {r['filename']}")
-                    info(f"    Line: {r['line_number']}")
-                    info(f"    CWE:  {r.get('issue_cwe', {}).get('id', 'N/A')}")
-                    info(f"    Code: {r.get('code', '').strip()}")
+                for f in medium:
+                    warning(f"[{f.rule_id}] {f.message}")
+                    info(f"    File: {f.filename}")
+                    info(f"    Line: {f.line}")
                     print()
 
             if low:
                 print(f"\n{Fore.CYAN}  ── Low Severity Findings ──{Style.RESET_ALL}")
-                for r in low:
-                    print(f"{Fore.CYAN}  ℹ️  [{r['test_id']}] {r['issue_text']}{Style.RESET_ALL}")
-                    info(f"    File: {r['filename']}")
-                    info(f"    Line: {r['line_number']}")
-                    info(f"    CWE:  {r.get('issue_cwe', {}).get('id', 'N/A')}")
-                    info(f"    Code: {r.get('code', '').strip()}")
+                for f in low:
+                    print(f"{Fore.CYAN}  ℹ️  [{f.rule_id}] {f.message}{Style.RESET_ALL}")
+                    info(f"    File: {f.filename}")
+                    info(f"    Line: {f.line}")
+                    info(f"    CWE:  {f.cwe}")
+                    if f.code:
+                        info(f"    Code: {f.code.strip()[:80]}")
                     print()
 
             if not high and not medium and not low:
@@ -154,32 +173,31 @@ def cmd_scan(args):
             elif not high and not medium:
                 success("No High or Medium findings detected")
 
-            info(f"Python total — High: {len(high)}  Medium: {len(medium)}  Low: {len(low)}")
+            info(f"Python total — High: {len(high)}  "
+                 f"Medium: {len(medium)}  Low: {len(low)}")
 
     # ── JavaScript scan via Semgrep ────────────────────────────────────────
     if 'javascript' in languages or 'typescript' in languages:
         section("JavaScript / TypeScript — Semgrep p/nodejs")
         try:
-            cmd = [
-                'semgrep', '--config=p/nodejs',
-                '--json', str(path)
-            ]
-            result = subprocess.run( # nosec B603 — cmd is hardcoded semgrep command, no user input
+            cmd = ['semgrep', '--config=p/nodejs', '--json', str(path)]
+            res = subprocess.run(  # nosec B603
                 cmd, capture_output=True, text=True, timeout=60,
                 encoding='utf-8', errors='replace'
             )
-            output = result.stdout
+            output = res.stdout
             json_start = output.find('{')
 
             if json_start >= 0:
-                data = json.loads(output[json_start:])
-                findings = data.get('results', [])
+                data = jsonlib.loads(output[json_start:])
+                result = parse_semgrep_to_result(data, result)
+                findings = [f for f in result.findings if f.source == 'semgrep']
                 total_high += len(findings)
 
                 if findings:
                     for f in findings:
-                        error(f"[SEMGREP] {f['check_id']}")
-                        info(f"  File: {f['path']} — Line {f['start']['line']}")
+                        error(f"[SEMGREP] {f.rule_id}")
+                        info(f"    File: {f.filename} — Line {f.line}")
                 else:
                     success("No findings in JavaScript/TypeScript files")
 
@@ -187,7 +205,6 @@ def cmd_scan(args):
 
         except FileNotFoundError:
             warning("Semgrep not installed — skipping JS/TS scan")
-            info("Install with: pip install semgrep")
 
     # ── Final verdict ──────────────────────────────────────────────────────
     section("SHIELD SCAN RESULT")
@@ -206,6 +223,29 @@ def cmd_scan(args):
         print(f"  {Fore.CYAN}Low:    {total_low}  ← best practice violations{Style.RESET_ALL}")
     else:
         print(f"  {Fore.GREEN}Low:    {total_low}{Style.RESET_ALL}")
+
+    # ── Grade ──────────────────────────────────────────────────────────────
+    print()
+    grade_display = {
+        "A+": Fore.GREEN, "A": Fore.GREEN,
+        "B": Fore.YELLOW, "C": Fore.YELLOW,
+        "D": Fore.RED, "F": Fore.RED
+    }.get(result.grade, Fore.WHITE)
+    print(f"  {grade_display}Security Grade: {result.grade}  "
+          f"·  I/100L: {result.i100l}{Style.RESET_ALL}")
+
+    # ── JSON output ────────────────────────────────────────────────────────
+    if hasattr(args, 'json') and args.json:
+        print(jsonlib.dumps(
+            [f.to_dict() for f in result.findings], indent=2
+        ))
+
+    # ── HTML Report ────────────────────────────────────────────────────────
+    if hasattr(args, 'report') and args.report:
+        report_path = generate_report(result, args.report)
+        print()
+        success(f"Report saved: {report_path}")
+        info("Open in browser to view full results")
 
     print()
     if total_high > 0:
@@ -294,7 +334,7 @@ Examples:
 
     subparsers = parser.add_subparsers(dest="command")
 
-    # ── scan ──────────────────────────────────────────────────────────────
+   # ── scan ──────────────────────────────────────────────────────────────────
     scan_parser = subparsers.add_parser(
         "scan",
         help="Scan a directory for security vulnerabilities"
@@ -302,6 +342,17 @@ Examples:
     scan_parser.add_argument(
         "path",
         help="Directory to scan"
+    )
+    scan_parser.add_argument(
+        "--report",
+        default=None,
+        help="Generate HTML report (e.g. --report report.html)"
+    )
+    scan_parser.add_argument(
+        "--json",
+        action="store_true",
+        default=False,
+        help="Output results as JSON"
     )
 
     # ── fix ───────────────────────────────────────────────────────────────

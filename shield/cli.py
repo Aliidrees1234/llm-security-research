@@ -5,7 +5,7 @@ Secure Hybrid Integration and Enforcement Layer
 for LLM-assisted Development
 
 Author: Ali Yasin Idrees
-Version: 0.1.0
+Version: 0.3.0
 
 Commands:
   shield scan <path>              Scan for vulnerabilities
@@ -263,7 +263,17 @@ def cmd_scan(args):
 
 def cmd_fix(args):
     """shield fix <path>"""
-    print_banner()
+    from shield.reporter import (
+        ScanResult, Finding,
+        generate_report,
+        parse_bandit_to_result
+    )
+    import json as jsonlib
+    import subprocess # nosec B404 — subprocess used to run Bandit with hardcoded commands only
+
+    if sys.stdout.isatty():
+        print_banner()
+
     section(f"FIXING  {args.path}")
 
     path = Path(args.path)
@@ -276,7 +286,6 @@ def cmd_fix(args):
     else:
         info(f"Safe mode — fixed files will be saved to: {args.output}")
 
-    # Import and run FDSP engine
     try:
         from shield.layer3_fdsp import fdsp_loop
         results = fdsp_loop(
@@ -288,23 +297,74 @@ def cmd_fix(args):
 
         section("FIX COMPLETE")
         summary = results.get('summary', {})
-        info(f"Baseline High:  {summary.get('baseline_high', '?')}")
-        info(f"Final High:     {summary.get('final_high', '?')}")
-        info(f"Baseline I/100L: {summary.get('baseline_I100L', '?')}")
-        info(f"Final I/100L:    {summary.get('final_I100L', '?')}")
 
-        total_fixes = sum(results.get('total_fixes', {}).values())
-        info(f"Total auto-fixes applied: {total_fixes}")
+        baseline_high  = summary.get('baseline_high', 0)
+        final_high     = summary.get('final_high', 0)
+        baseline_i100l = summary.get('baseline_I100L', 0)
+        final_i100l    = summary.get('final_I100L', 0)
+        total_fixes    = sum(results.get('total_fixes', {}).values())
 
-        if summary.get('final_high', 1) == 0:
+        info(f"Baseline High:    {baseline_high}")
+        info(f"Final High:       {final_high}")
+        info(f"Baseline I/100L:  {baseline_i100l}")
+        info(f"Final I/100L:     {final_i100l}")
+        info(f"Auto-fixes applied: {total_fixes}")
+        print()
+
+        # Fixes breakdown
+        if results.get('total_fixes'):
+            section("FIXES APPLIED")
+            for rule, count in results['total_fixes'].items():
+                if not rule.endswith('_strategy') and not rule.endswith('_error'):
+                    success(f"[{rule}] {count} fix(es) applied")
+
+        # Grade improvement
+        if final_high == 0:
             success("Zero High-severity findings remaining")
+            if baseline_high > 0:
+                reduction = round((baseline_high - final_high) / baseline_high * 100)
+                success(f"High-severity reduction: {reduction}%")
         else:
-            warning(f"{summary.get('final_high')} High finding(s) remain — manual review needed")
+            warning(f"{final_high} High finding(s) remain — manual review needed")
+
+        # Generate fix report
+        if hasattr(args, 'report') and args.report:
+            # Scan the fixed output for the report
+            fixed_path = Path(args.output) / 'working_copy'
+            if fixed_path.exists():
+                cmd = [
+                    sys.executable, '-m', 'bandit',
+                    '-r', str(fixed_path),
+                    '-f', 'json', '-q'
+                ]
+                res = subprocess.run(  # nosec B603
+                    cmd, capture_output=True, text=True
+                )
+                output = res.stdout or res.stderr
+                json_start = output.find('{')
+                if json_start >= 0:
+                    data = jsonlib.loads(output[json_start:])
+                    loc = sum(
+                        len(f.read_text(encoding='utf-8', errors='ignore').splitlines())
+                        for f in fixed_path.rglob('*.py')
+                    )
+                    result = parse_bandit_to_result(data, str(args.path), loc)
+                    report_path = generate_report(result, args.report)
+                    print()
+                    success(f"Fix report saved: {report_path}")
+
+        # Save JSON results
+        if hasattr(args, 'output_json') and args.output_json:
+            json_path = Path(args.output_json)
+            json_path.write_text(
+                jsonlib.dumps(results, indent=2),
+                encoding='utf-8'
+            )
+            success(f"JSON results saved: {args.output_json}")
 
     except Exception as e:
         error(f"Fix failed: {e}")
         sys.exit(1)
-
 # ── VERSION COMMAND ───────────────────────────────────────────────────────────
 
 def cmd_version(args):
@@ -380,6 +440,17 @@ Examples:
         type=int,
         default=3,
         help="Maximum FDSP iterations (default: 3)"
+    )
+    fix_parser.add_argument(
+        "--report",
+        default=None,
+        help="Generate HTML report of fixed code (e.g. --report fixed_report.html)"
+    )
+    fix_parser.add_argument(
+        "--output-json",
+        default=None,
+        dest="output_json",
+        help="Save fix results as JSON (e.g. --output-json results.json)"
     )
 
     # ── version ───────────────────────────────────────────────────────────

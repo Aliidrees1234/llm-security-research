@@ -1,0 +1,44 @@
+{
+  "corpus": "chatgpt",
+  "timestamp": "2026-05-18T08:05:45.143288",
+  "iterations": {
+    "K0": {
+      "label": "Baseline (no FDSP)",
+      "High": 11,
+      "Medium": 0,
+      "Low": 6,
+      "Total": 17,
+      "Skipped": 0,
+      "LOC": 515,
+      "I100L": 3.3,
+      "fixes_applied": {}
+    },
+    "K1": {
+      "label": "After K=1 FDSP iteration",
+      "High": 0,
+      "Medium": 0,
+      "Low": 6,
+      "Total": 6,
+      "Skipped": 0,
+      "LOC": 456,
+      "I100L": 1.32,
+      "fixes_applied": {
+        "B201": 10,
+        "CUSTOM_WERKZEUG": 1
+      }
+    }
+  },
+  "total_fixes": {
+    "B201": 10,
+    "CUSTOM_WERKZEUG": 1
+  },
+  "summary": {
+    "baseline_high": 11,
+    "final_high": 0,
+    "high_reduction": 11,
+    "baseline_total": 17,
+    "final_total": 6,
+    "baseline_I100L": 3.3,
+    "final_I100L": 1.32
+  }
+}

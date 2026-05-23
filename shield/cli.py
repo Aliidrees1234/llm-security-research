@@ -36,7 +36,7 @@ BANNER = f"""
 ║   {Fore.WHITE}╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝{Fore.WHITE}               ║
 ║                                                              ║
 ║   {Fore.WHITE}Security Layer for LLM-assisted Development{Fore.WHITE}              ║
-║   {Fore.WHITE}v0.3.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
+║   {Fore.WHITE}v0.4.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}"""
 
@@ -441,11 +441,11 @@ def cmd_compare(args):
 
 def cmd_version(args):
     print_banner()
-    info("SHIELD Security v0.3.0")
+    info("SHIELD Security v0.4.0")
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
-    info("Engine: Full AST engine — 11 rules — 89 tests")
+    info("Engine: Full AST engine — 11 rules — 89 tests — HTML/JSON reports")
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 

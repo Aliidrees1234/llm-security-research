@@ -14,6 +14,7 @@ Version: 0.1.0
 import json
 from datetime import datetime
 from pathlib import Path
+from unittest import result
 
 
 # ── DATA STRUCTURES ───────────────────────────────────────────────────────────
@@ -452,3 +453,220 @@ def parse_semgrep_to_result(semgrep_json: dict,
         result.add_finding(finding)
 
     return result
+
+def save_json_report(result: ScanResult, output_path: str = "shield_report.json") -> str:
+    """
+    Save scan results as JSON file.
+    Returns the output path.
+    """
+    data = {
+        "shield_version": "0.3.0",
+        "timestamp":      result.timestamp,
+        "corpus":         result.corpus_path,
+        "loc":            result.loc,
+        "languages":      result.languages,
+        "grade":          result.grade,
+        "i100l":          result.i100l,
+        "summary": {
+            "high":   len(result.high),
+            "medium": len(result.medium),
+            "low":    len(result.low),
+            "total":  len(result.findings),
+        },
+        "findings": [f.to_dict() for f in result.findings],
+    }
+    Path(output_path).write_text(
+        __import__('json').dumps(data, indent=2),
+        encoding='utf-8'
+    )
+    return output_path
+
+
+def generate_comparison_report(before: ScanResult,
+                                after: ScanResult,
+                                output_path: str = "shield_comparison.html") -> str:
+    """
+    Generate a before/after comparison HTML report.
+    Shows what SHIELD fixed and what remains.
+    """
+    fixed_count   = len(before.findings) - len(after.findings)
+    high_fixed    = len(before.high) - len(after.high)
+    i100l_change  = round(before.i100l - after.i100l, 2)
+    reduction_pct = round(
+        (len(before.findings) - len(after.findings)) /
+        max(len(before.findings), 1) * 100
+    )
+
+    before_grade_color = before.grade_color
+    after_grade_color  = after.grade_color
+
+    html = f"""<!DOCTYPE html>
+    
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHIELD — Before/After Comparison</title>
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #F5F5F5;
+            color: #1A1A1A;
+            line-height: 1.6;
+        }}
+        .header {{
+            background: #0D0D0D;
+            color: white;
+            padding: 32px 48px;
+            border-bottom: 4px solid #444;
+        }}
+        .header h1 {{ font-size: 28px; letter-spacing: 2px; text-transform: uppercase; }}
+        .header p  {{ color: #999; margin-top: 4px; font-size: 14px; }}
+        .comparison-grid {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            padding: 32px 48px;
+        }}
+        .panel {{
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            border: 1px solid #E0E0E0;
+        }}
+        .panel h2 {{
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #E0E0E0;
+        }}
+        .grade-big {{
+            font-size: 72px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1;
+            margin: 16px 0;
+        }}
+        .stat-row {{
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #F0F0F0;
+            font-size: 14px;
+        }}
+        .stat-row:last-child {{ border-bottom: none; }}
+        .improvement {{
+            background: white;
+            border-radius: 8px;
+            padding: 24px 48px;
+            margin: 0 48px 32px;
+            border: 1px solid #E0E0E0;
+        }}
+        .improvement h2 {{
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }}
+        .improvement-grid {{
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }}
+        .imp-card {{
+            text-align: center;
+            padding: 16px;
+            background: #F9F9F9;
+            border-radius: 8px;
+            border: 1px solid #E0E0E0;
+        }}
+        .imp-number {{
+            font-size: 32px;
+            font-weight: bold;
+            color: #1B5E20;
+        }}
+        .imp-label {{
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }}
+        .footer {{
+            text-align: center;
+            padding: 24px;
+            color: #999;
+            font-size: 12px;
+            border-top: 1px solid #E0E0E0;
+            background: white;
+        }}
+        .red   {{ color: #B71C1C; }}
+        .green {{ color: #1B5E20; }}
+        .ora   {{ color: #E65100; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚡ SHIELD — Before / After Comparison</h1>
+        <p>{result.corpus_path if hasattr(result, 'corpus_path') else before.corpus_path}
+           &nbsp;·&nbsp; Ali Yasin Idrees</p>
+    </div>
+
+    <div class="comparison-grid">
+        <div class="panel">
+            <h2>⚠️ Before SHIELD</h2>
+            <div class="grade-big" style="color:{before_grade_color};">{before.grade}</div>
+            <div class="stat-row"><span>High Severity</span><span class="red">{len(before.high)}</span></div>
+            <div class="stat-row"><span>Medium Severity</span><span class="ora">{len(before.medium)}</span></div>
+            <div class="stat-row"><span>Low Severity</span><span>{len(before.low)}</span></div>
+            <div class="stat-row"><span>Total Findings</span><span>{len(before.findings)}</span></div>
+            <div class="stat-row"><span>I/100L Score</span><span>{before.i100l}</span></div>
+            <div class="stat-row"><span>Lines of Code</span><span>{before.loc}</span></div>
+        </div>
+
+        <div class="panel">
+            <h2>✅ After SHIELD</h2>
+            <div class="grade-big" style="color:{after_grade_color};">{after.grade}</div>
+            <div class="stat-row"><span>High Severity</span><span class="green">{len(after.high)}</span></div>
+            <div class="stat-row"><span>Medium Severity</span><span class="green">{len(after.medium)}</span></div>
+            <div class="stat-row"><span>Low Severity</span><span>{len(after.low)}</span></div>
+            <div class="stat-row"><span>Total Findings</span><span>{len(after.findings)}</span></div>
+            <div class="stat-row"><span>I/100L Score</span><span class="green">{after.i100l}</span></div>
+            <div class="stat-row"><span>Lines of Code</span><span>{after.loc}</span></div>
+        </div>
+    </div>
+
+    <div class="improvement">
+        <h2>📈 Improvement Summary</h2>
+        <div class="improvement-grid">
+            <div class="imp-card">
+                <div class="imp-number">{high_fixed}</div>
+                <div class="imp-label">High Findings Fixed</div>
+            </div>
+            <div class="imp-card">
+                <div class="imp-number">{fixed_count}</div>
+                <div class="imp-label">Total Findings Fixed</div>
+            </div>
+            <div class="imp-card">
+                <div class="imp-number">{reduction_pct}%</div>
+                <div class="imp-label">Reduction</div>
+            </div>
+            <div class="imp-card">
+                <div class="imp-number">{i100l_change}</div>
+                <div class="imp-label">I/100L Improvement</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        Generated by SHIELD Security v0.3.0 &nbsp;·&nbsp;
+        Ali Yasin Idrees &nbsp;·&nbsp;
+        github.com/Aliidrees1234/llm-security-research
+    </div>
+</body>
+</html>"""
+
+    Path(output_path).write_text(html, encoding='utf-8')
+    return output_path

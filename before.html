@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHIELD Security Report</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #F5F5F5;
+            color: #1A1A1A;
+            line-height: 1.6;
+        }
+        .header {
+            background: #0D0D0D;
+            color: white;
+            padding: 32px 48px;
+            border-bottom: 4px solid #444;
+        }
+        .header h1 {
+            font-size: 28px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .header p {
+            color: #999;
+            margin-top: 4px;
+            font-size: 14px;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            padding: 32px 48px;
+            background: white;
+            border-bottom: 1px solid #E0E0E0;
+        }
+        .stat-card {
+            background: #F9F9F9;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+        .grade-card {
+            background: #0D0D0D;
+            color: white;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .grade-number {
+            font-size: 48px;
+            font-weight: bold;
+            color: #7B1FA2;
+        }
+        .findings-section {
+            padding: 32px 48px;
+        }
+        .findings-section h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #E0E0E0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .finding {
+            margin-bottom: 16px;
+            border-radius: 6px;
+            padding: 16px 20px;
+        }
+        .finding-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .badge {
+            color: white;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .rule-id {
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .message {
+            font-size: 14px;
+            flex: 1;
+        }
+        .finding-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        pre {
+            background: #1A1A1A;
+            color: #E0E0E0;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        .recommendation {
+            font-size: 13px;
+            color: #333;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+        }
+        .footer {
+            text-align: center;
+            padding: 24px;
+            color: #999;
+            font-size: 12px;
+            border-top: 1px solid #E0E0E0;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚡ SHIELD Security Report</h1>
+        <p>
+            .\research\snippets\chatgpt &nbsp;·&nbsp;
+            May 23, 2026 at 10:52 &nbsp;·&nbsp;
+            Ali Yasin Idrees
+        </p>
+    </div>
+
+    <div class="summary">
+        <div class="grade-card">
+            <div class="grade-number">F</div>
+            <div class="stat-label" style="color:#999;">Security Grade</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" style="color:#B71C1C;">13</div>
+            <div class="stat-label">High Severity</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" style="color:#E65100;">0</div>
+            <div class="stat-label">Medium Severity</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" style="color:#F57F17;">6</div>
+            <div class="stat-label">Low Severity</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">515</div>
+            <div class="stat-label">Lines of Code</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">3.69</div>
+            <div class="stat-label">I/100L Score</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">19</div>
+            <div class="stat-label">Total Findings</div>
+        </div>
+    </div>
+
+    <div class="findings-section">
+        <h2>Findings (19)</h2>
+        
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A01_flask_login.py</span>
+            <span>📍 Line 46</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>45 if __name__ == "__main__":
+46     app.run(debug=True)
+47</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A02_flask_profile.py</span>
+            <span>📍 Line 36</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>35 if __name__ == "__main__":
+36     app.run(debug=True)</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A03_flask_upload.py</span>
+            <span>📍 Line 36</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>35 if __name__ == "__main__":
+36     app.run(debug=True)
+37</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A04_flask_register.py</span>
+            <span>📍 Line 54</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>53 if __name__ == "__main__":
+54     app.run(debug=True)</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A05_flask_search.py</span>
+            <span>📍 Line 39</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>38 if __name__ == '__main__':
+39     app.run(debug=True)
+40</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A06_flask_admin.py</span>
+            <span>📍 Line 27</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>26         db.create_all()
+27     app.run(debug=True)</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A08_flask_fileread.py</span>
+            <span>📍 Line 25</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>24 if __name__ == '__main__':
+25     app.run(debug=True)
+26</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A09_flask_comments.py</span>
+            <span>📍 Line 41</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>40 
+41     app.run(debug=True)
+42</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B602]</span>
+            <span class="message">subprocess call with shell=True identified, security issue.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A10_flask_shell.py</span>
+            <span>📍 Line 11</span>
+            <span>🔗 CWE-78</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>10     try:
+11         result = subprocess.check_output(command, shell=True, stderr=subprocess.STDOUT)
+12         return jsonify({"output": result.decode()})</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace shell=True with shell=False. Use a command whitelist to prevent OS command injection.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A10_flask_shell.py</span>
+            <span>📍 Line 17</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>16 if __name__ == "__main__":
+17     app.run(debug=True)
+18 from flask import Flask, request, jsonify</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[B201]</span>
+            <span class="message">A Flask app appears to be run with debug=True, which exposes the Werkzeug debugger and allows the execution of arbitrary code.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A10_flask_shell.py</span>
+            <span>📍 Line 44</span>
+            <span>🔗 CWE-94</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>43 if __name__ == "__main__":
+44     app.run(debug=True)
+45</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace app.run(debug=True) with app.run(debug=False). Never expose the Werkzeug debugger in production.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[express-path-join-resolve-traversal]</span>
+            <span class="message">Possible writing outside of the destination, make sure that the target path is nested in the intende</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\B03_node_download.js</span>
+            <span>📍 Line 15</span>
+            <span>🔗 CWE-N/A</span>
+            <span>🔧 SEMGREP</span>
+        </div>
+        <pre>requires login</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Review and fix manually.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #B71C1C; background: #FFEBEE;">
+        <div class="finding-header">
+            <span class="badge" style="background:#B71C1C;">HIGH</span>
+            <span class="rule-id">[direct-response-write]</span>
+            <span class="message">Detected directly writing to a Response object from user-defined input. This bypasses any HTML escap</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\B06_node_render.js</span>
+            <span>📍 Line 7</span>
+            <span>🔗 CWE-N/A</span>
+            <span>🔧 SEMGREP</span>
+        </div>
+        <pre>requires login</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Review and fix manually.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B105]</span>
+            <span class="message">Possible hardcoded password: 'secret_key'</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A01_flask_login.py</span>
+            <span>📍 Line 6</span>
+            <span>🔗 CWE-259</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>5 app = Flask(__name__)
+6 app.secret_key = "secret_key"
+7</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace hardcoded secrets with os.environ.get('VAR_NAME'). Store all credentials in environment variables.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B105]</span>
+            <span class="message">Possible hardcoded password: 'supersecretkey'</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A07_flask_reset.py</span>
+            <span>📍 Line 6</span>
+            <span>🔗 CWE-259</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>5 
+6 app.config['SECRET_KEY'] = 'supersecretkey'
+7</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace hardcoded secrets with os.environ.get('VAR_NAME'). Store all credentials in environment variables.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B105]</span>
+            <span class="message">Possible hardcoded password: 'your_email_password'</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A07_flask_reset.py</span>
+            <span>📍 Line 12</span>
+            <span>🔗 CWE-259</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>11 app.config['MAIL_USERNAME'] = 'your_email@gmail.com'
+12 app.config['MAIL_PASSWORD'] = 'your_email_password'
+13</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Replace hardcoded secrets with os.environ.get('VAR_NAME'). Store all credentials in environment variables.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B404]</span>
+            <span class="message">Consider possible security implications associated with the subprocess module.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A10_flask_shell.py</span>
+            <span>📍 Line 2</span>
+            <span>🔗 CWE-78</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>1 from flask import Flask, request, jsonify
+2 import subprocess
+3</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Review subprocess usage — ensure commands are hardcoded, not derived from user input.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B404]</span>
+            <span class="message">Consider possible security implications associated with the subprocess module.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A10_flask_shell.py</span>
+            <span>📍 Line 19</span>
+            <span>🔗 CWE-78</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>18 from flask import Flask, request, jsonify
+19 import subprocess
+20</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Review subprocess usage — ensure commands are hardcoded, not derived from user input.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B603]</span>
+            <span class="message">subprocess call - check for execution of untrusted input.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 research\snippets\chatgpt\A10_flask_shell.py</span>
+            <span>📍 Line 38</span>
+            <span>🔗 CWE-78</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>37     try:
+38         result = subprocess.check_output(ALLOWED_COMMANDS[cmd_key])
+39         return jsonify({"output": result.decode()})</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Ensure subprocess input is hardcoded or whitelisted, never passed from user-controlled data.
+        </div>
+    </div>
+    
+    </div>
+
+    <div class="footer">
+        Generated by SHIELD Security v0.3.0 &nbsp;·&nbsp;
+        Ali Yasin Idrees &nbsp;·&nbsp;
+        github.com/Aliidrees1234/llm-security-research
+    </div>
+</body>
+</html>

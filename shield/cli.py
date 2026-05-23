@@ -11,6 +11,7 @@ Commands:
   shield scan <path>              Scan for vulnerabilities
   shield fix <path>               Scan and auto-fix
   shield fix <path> --inplace     Fix original files directly
+  shield compare before.json after.json  Compare two scans
   shield version                  Show version
 """
 
@@ -42,7 +43,6 @@ BANNER = f"""
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def print_banner():
-    import sys
     if sys.stdout.isatty():
         print(BANNER)
 
@@ -75,11 +75,12 @@ def detect_languages(path: str) -> list[str]:
 
 def cmd_scan(args):
     """shield scan <path> [--report report.html] [--json]"""
-    import subprocess # nosec B404 — subprocess used to run Bandit/Semgrep with hardcoded commands only
+    import subprocess  # nosec B404 — hardcoded commands only
     import json as jsonlib
     from shield.reporter import (
         ScanResult, Finding,
         generate_report,
+        save_json_report,
         parse_bandit_to_result,
         parse_semgrep_to_result
     )
@@ -229,23 +230,25 @@ def cmd_scan(args):
     grade_display = {
         "A+": Fore.GREEN, "A": Fore.GREEN,
         "B": Fore.YELLOW, "C": Fore.YELLOW,
-        "D": Fore.RED, "F": Fore.RED
+        "D": Fore.RED,    "F": Fore.RED
     }.get(result.grade, Fore.WHITE)
     print(f"  {grade_display}Security Grade: {result.grade}  "
           f"·  I/100L: {result.i100l}{Style.RESET_ALL}")
 
-    # ── JSON output ────────────────────────────────────────────────────────
+    # ── JSON terminal output ───────────────────────────────────────────────
     if hasattr(args, 'json') and args.json:
         print(jsonlib.dumps(
             [f.to_dict() for f in result.findings], indent=2
         ))
 
-    # ── HTML Report ────────────────────────────────────────────────────────
+    # ── HTML Report + JSON file ────────────────────────────────────────────
     if hasattr(args, 'report') and args.report:
         report_path = generate_report(result, args.report)
+        json_path   = args.report.replace('.html', '.json')
+        save_json_report(result, json_path)
         print()
         success(f"Report saved: {report_path}")
-        info("Open in browser to view full results")
+        info(f"JSON saved:   {json_path}")
 
     print()
     if total_high > 0:
@@ -263,13 +266,13 @@ def cmd_scan(args):
 
 def cmd_fix(args):
     """shield fix <path>"""
+    import subprocess  # nosec B404 — hardcoded commands only
+    import json as jsonlib
     from shield.reporter import (
-        ScanResult, Finding,
         generate_report,
+        save_json_report,
         parse_bandit_to_result
     )
-    import json as jsonlib
-    import subprocess # nosec B404 — subprocess used to run Bandit with hardcoded commands only
 
     if sys.stdout.isatty():
         print_banner()
@@ -296,18 +299,20 @@ def cmd_fix(args):
         )
 
         section("FIX COMPLETE")
-        summary = results.get('summary', {})
-
+        summary        = results.get('summary', {})
         baseline_high  = summary.get('baseline_high', 0)
         final_high     = summary.get('final_high', 0)
         baseline_i100l = summary.get('baseline_I100L', 0)
         final_i100l    = summary.get('final_I100L', 0)
-        total_fixes    = sum(results.get('total_fixes', {}).values())
+        total_fixes    = sum(
+            v for k, v in results.get('total_fixes', {}).items()
+            if not k.endswith(('_strategy', '_error'))
+        )
 
-        info(f"Baseline High:    {baseline_high}")
-        info(f"Final High:       {final_high}")
-        info(f"Baseline I/100L:  {baseline_i100l}")
-        info(f"Final I/100L:     {final_i100l}")
+        info(f"Baseline High:     {baseline_high}")
+        info(f"Final High:        {final_high}")
+        info(f"Baseline I/100L:   {baseline_i100l}")
+        info(f"Final I/100L:      {final_i100l}")
         info(f"Auto-fixes applied: {total_fixes}")
         print()
 
@@ -315,61 +320,128 @@ def cmd_fix(args):
         if results.get('total_fixes'):
             section("FIXES APPLIED")
             for rule, count in results['total_fixes'].items():
-                if not rule.endswith('_strategy') and not rule.endswith('_error'):
+                if not rule.endswith(('_strategy', '_error')):
                     success(f"[{rule}] {count} fix(es) applied")
 
         # Grade improvement
         if final_high == 0:
             success("Zero High-severity findings remaining")
             if baseline_high > 0:
-                reduction = round((baseline_high - final_high) / baseline_high * 100)
+                reduction = round(
+                    (baseline_high - final_high) / baseline_high * 100
+                )
                 success(f"High-severity reduction: {reduction}%")
         else:
             warning(f"{final_high} High finding(s) remain — manual review needed")
 
-        # Generate fix report
-        if hasattr(args, 'report') and args.report:
-            # Scan the fixed output for the report
-            fixed_path = Path(args.output) / 'working_copy'
-            if fixed_path.exists():
-                cmd = [
-                    sys.executable, '-m', 'bandit',
-                    '-r', str(fixed_path),
-                    '-f', 'json', '-q'
-                ]
-                res = subprocess.run(  # nosec B603
-                    cmd, capture_output=True, text=True
+        # ── Auto-scan fixed files → save HTML + JSON ───────────────────────
+        fixed_path = Path(args.output) / 'working_copy'
+        if fixed_path.exists():
+            cmd = [
+                sys.executable, '-m', 'bandit',
+                '-r', str(fixed_path),
+                '-f', 'json', '-q'
+            ]
+            res = subprocess.run(  # nosec B603
+                cmd, capture_output=True, text=True
+            )
+            output     = res.stdout or res.stderr
+            json_start = output.find('{')
+
+            if json_start >= 0:
+                data = jsonlib.loads(output[json_start:])
+                loc  = sum(
+                    len(f.read_text(encoding='utf-8', errors='ignore').splitlines())
+                    for f in fixed_path.rglob('*.py')
                 )
-                output = res.stdout or res.stderr
-                json_start = output.find('{')
-                if json_start >= 0:
-                    data = jsonlib.loads(output[json_start:])
-                    loc = sum(
-                        len(f.read_text(encoding='utf-8', errors='ignore').splitlines())
-                        for f in fixed_path.rglob('*.py')
-                    )
-                    result = parse_bandit_to_result(data, str(args.path), loc)
-                    report_path = generate_report(result, args.report)
+                after_result = parse_bandit_to_result(
+                    data, str(args.path), loc
+                )
+
+                # Save after.json automatically
+                after_json = str(Path(args.output) / 'after.json')
+                save_json_report(after_result, after_json)
+                success(f"After JSON saved: {after_json}")
+
+                # Save HTML report if requested
+                if hasattr(args, 'report') and args.report:
+                    report_path = generate_report(after_result, args.report)
                     print()
                     success(f"Fix report saved: {report_path}")
 
-        # Save JSON results
+        # Save FDSP results JSON if requested
         if hasattr(args, 'output_json') and args.output_json:
-            json_path = Path(args.output_json)
-            json_path.write_text(
+            Path(args.output_json).write_text(
                 jsonlib.dumps(results, indent=2),
                 encoding='utf-8'
             )
-            success(f"JSON results saved: {args.output_json}")
+            success(f"FDSP results saved: {args.output_json}")
 
     except Exception as e:
         error(f"Fix failed: {e}")
         sys.exit(1)
+
+# ── COMPARE COMMAND ───────────────────────────────────────────────────────────
+
+def cmd_compare(args):
+    """shield compare before.json after.json --report comparison.html"""
+    import json as jsonlib
+    from shield.reporter import (
+        ScanResult, Finding,
+        generate_comparison_report
+    )
+
+    if sys.stdout.isatty():
+        print_banner()
+
+    section(f"COMPARING  {args.before}  vs  {args.after}")
+
+    def load_result(json_path: str) -> ScanResult:
+        data   = jsonlib.loads(Path(json_path).read_text(encoding='utf-8'))
+        result = ScanResult(
+            data.get('corpus', json_path),
+            loc=data.get('loc', 0)
+        )
+        result.languages = data.get('languages', [])
+        for f in data.get('findings', []):
+            result.add_finding(Finding(
+                rule_id  = f.get('rule_id', ''),
+                severity = f.get('severity', 'LOW'),
+                cwe      = f.get('cwe', 'N/A'),
+                message  = f.get('message', ''),
+                filename = f.get('filename', ''),
+                line     = f.get('line', 0),
+                code     = f.get('code', ''),
+                source   = f.get('source', 'bandit'),
+            ))
+        return result
+
+    try:
+        before_result = load_result(args.before)
+        after_result  = load_result(args.after)
+
+        info(f"Before — Grade: {before_result.grade}  "
+             f"Findings: {len(before_result.findings)}  "
+             f"I/100L: {before_result.i100l}")
+        info(f"After  — Grade: {after_result.grade}  "
+             f"Findings: {len(after_result.findings)}  "
+             f"I/100L: {after_result.i100l}")
+
+        report_path = generate_comparison_report(
+            before_result, after_result, args.report
+        )
+        print()
+        success(f"Comparison report saved: {report_path}")
+
+    except Exception as e:
+        error(f"Compare failed: {e}")
+        sys.exit(1)
+
 # ── VERSION COMMAND ───────────────────────────────────────────────────────────
 
 def cmd_version(args):
     print_banner()
-    info("SHIELD Security v0.2.0")
+    info("SHIELD Security v0.3.0")
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
@@ -385,34 +457,30 @@ def main():
         epilog="""
 Examples:
   shield scan ./my_project
+  shield scan ./my_project --report report.html
   shield fix ./my_project
   shield fix ./my_project --inplace
-  shield fix ./my_project --output ./fixed --k 3
+  shield fix ./my_project --output ./fixed --k 3 --report after.html
+  shield compare before.json after.json --report comparison.html
   shield version
         """
     )
 
     subparsers = parser.add_subparsers(dest="command")
 
-   # ── scan ──────────────────────────────────────────────────────────────────
+    # ── scan ──────────────────────────────────────────────────────────────
     scan_parser = subparsers.add_parser(
         "scan",
         help="Scan a directory for security vulnerabilities"
     )
+    scan_parser.add_argument("path", help="Directory to scan")
     scan_parser.add_argument(
-        "path",
-        help="Directory to scan"
-    )
-    scan_parser.add_argument(
-        "--report",
-        default=None,
+        "--report", default=None,
         help="Generate HTML report (e.g. --report report.html)"
     )
     scan_parser.add_argument(
-        "--json",
-        action="store_true",
-        default=False,
-        help="Output results as JSON"
+        "--json", action="store_true", default=False,
+        help="Output results as JSON to terminal"
     )
 
     # ── fix ───────────────────────────────────────────────────────────────
@@ -420,44 +488,42 @@ Examples:
         "fix",
         help="Scan and automatically fix security vulnerabilities"
     )
+    fix_parser.add_argument("path", help="Directory to fix")
     fix_parser.add_argument(
-        "path",
-        help="Directory to fix"
-    )
-    fix_parser.add_argument(
-        "--inplace",
-        action="store_true",
-        default=False,
+        "--inplace", action="store_true", default=False,
         help="Fix original files directly (WARNING: modifies your files)"
     )
     fix_parser.add_argument(
-        "--output",
-        default="shield_results",
+        "--output", default="shield_results",
         help="Output directory for fixed files (default: shield_results)"
     )
     fix_parser.add_argument(
-        "--k",
-        type=int,
-        default=3,
+        "--k", type=int, default=3,
         help="Maximum FDSP iterations (default: 3)"
     )
     fix_parser.add_argument(
-        "--report",
-        default=None,
-        help="Generate HTML report of fixed code (e.g. --report fixed_report.html)"
+        "--report", default=None,
+        help="Generate HTML report of fixed code"
     )
     fix_parser.add_argument(
-        "--output-json",
-        default=None,
-        dest="output_json",
-        help="Save fix results as JSON (e.g. --output-json results.json)"
+        "--output-json", default=None, dest="output_json",
+        help="Save FDSP results as JSON"
+    )
+
+    # ── compare ───────────────────────────────────────────────────────────
+    compare_parser = subparsers.add_parser(
+        "compare",
+        help="Compare two JSON scan reports (before vs after)"
+    )
+    compare_parser.add_argument("before", help="Before JSON report path")
+    compare_parser.add_argument("after",  help="After JSON report path")
+    compare_parser.add_argument(
+        "--report", default="comparison.html",
+        help="Output comparison HTML (default: comparison.html)"
     )
 
     # ── version ───────────────────────────────────────────────────────────
-    subparsers.add_parser(
-        "version",
-        help="Show SHIELD version and author info"
-    )
+    subparsers.add_parser("version", help="Show SHIELD version and author info")
 
     # ── parse and dispatch ─────────────────────────────────────────────────
     args = parser.parse_args()
@@ -466,11 +532,14 @@ Examples:
         cmd_scan(args)
     elif args.command == "fix":
         cmd_fix(args)
+    elif args.command == "compare":
+        cmd_compare(args)
     elif args.command == "version":
         cmd_version(args)
     else:
         print_banner()
         parser.print_help()
+
 
 if __name__ == "__main__":
     main()

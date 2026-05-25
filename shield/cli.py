@@ -84,6 +84,12 @@ def cmd_scan(args):
         parse_bandit_to_result,
         parse_semgrep_to_result
     )
+    from shield.config import load_config
+    cfg = load_config(str(args.path))
+
+    # Apply config defaults where args not specified
+    if not args.report and cfg.get('report'):
+        args.report = cfg['report']
 
     if sys.stdout.isatty():
         print_banner()
@@ -447,6 +453,26 @@ def cmd_version(args):
     info("Research: LLM Security in Web Applications — 2026")
     info("Engine: Full AST engine — 11 rules — 89 tests — HTML/JSON reports")
 
+
+# ── INIT COMMAND ──────────────────────────────────────────────────────────────
+def cmd_init(args):
+    """shield init — create .shieldrc"""
+    from shield.config import create_default_config
+
+    if sys.stdout.isatty():
+        print_banner()
+
+    rc_path = Path(".shieldrc")
+    if rc_path.exists():
+        warning(".shieldrc already exists — not overwriting")
+        info("Delete it first if you want a fresh config")
+        return
+
+    create_default_config(".shieldrc")
+    success(".shieldrc created in current directory")
+    info("Edit it to customize SHIELD for this project")
+    info("Run 'shield scan .' to use it automatically")
+
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -525,6 +551,12 @@ Examples:
     # ── version ───────────────────────────────────────────────────────────
     subparsers.add_parser("version", help="Show SHIELD version and author info")
 
+    # ── init ──────────────────────────────────────────────────────────────────
+    subparsers.add_parser(
+        "init",
+        help="Create a .shieldrc config file in current directory"
+    )
+
     # ── parse and dispatch ─────────────────────────────────────────────────
     args = parser.parse_args()
 
@@ -536,9 +568,12 @@ Examples:
         cmd_compare(args)
     elif args.command == "version":
         cmd_version(args)
+    elif args.command == "init":
+     cmd_init(args)
     else:
         print_banner()
         parser.print_help()
+    
 
 
 if __name__ == "__main__":

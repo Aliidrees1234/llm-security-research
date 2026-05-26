@@ -465,6 +465,20 @@ class _HardcodedSecretFixer(ast.NodeTransformer):
                         node.value = self._make_environ_call('FLASK_SECRET_KEY')
                         self.fixes += 1
                         self.needs_os_import = True
+                        
+            # Dict subscript: app.config['SECRET_KEY'] = 'value'
+            elif isinstance(target, ast.Subscript):
+                # Get the key being subscripted
+                if isinstance(target.slice, ast.Constant):
+                    key_name = target.slice.value
+                    if key_name in self.SECRET_VARS:
+                        if (isinstance(node.value, ast.Constant) and
+                                isinstance(node.value.value, str) and
+                                len(node.value.value) >= self.MIN_SECRET_LEN):
+                            env_var = self.SECRET_VARS[key_name]
+                            node.value = self._make_environ_call(env_var)
+                            self.fixes += 1
+                            self.needs_os_import = True
 
         return self.generic_visit(node)
 

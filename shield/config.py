@@ -77,7 +77,7 @@ def load_config(start_path: str = ".") -> dict:
                         key = key.strip()
                         if key in DEFAULTS:
                             config[key] = _parse_value(value) 
-            except Exception:
+            except Exception: # nosec B110 — intentional: malformed .shieldrc lines skipped silently
                 pass
             break
 

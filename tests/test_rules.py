@@ -392,6 +392,20 @@ class TestB105ASTRobustness:
         assert "supersecretvalue123" not in fixed
         assert "os.environ.get" in fixed
 
+    def test_fixes_app_config_subscript(self):
+        code = "app.config['SECRET_KEY'] = 'supersecretkey'"
+        fixed, count = fix_B105_B106_hardcoded(code)
+        assert "'supersecretkey'" not in fixed
+        assert "os.environ.get" in fixed
+        assert count > 0
+
+    def test_fixes_mail_password_config(self):
+        code = "app.config['MAIL_PASSWORD'] = 'mypassword'"
+        fixed, count = fix_B105_B106_hardcoded(code)
+        assert "'mypassword'" not in fixed
+        assert "os.environ.get" in fixed
+        assert count > 0
+
 class TestB324ASTRobustness:
     """Tests that prove AST catches MD5/SHA1 by structure."""
 

@@ -451,7 +451,7 @@ def cmd_version(args):
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
-    info("Engine: Full AST engine — 11 rules — 89 tests — HTML/JSON reports")
+    info("Engine: Full AST engine — 11 rules — 91 tests — HTML/JSON reports")
 
 
 # ── INIT COMMAND ──────────────────────────────────────────────────────────────
@@ -462,16 +462,47 @@ def cmd_init(args):
     if sys.stdout.isatty():
         print_banner()
 
+    section("SHIELD INIT")
+
     rc_path = Path(".shieldrc")
     if rc_path.exists():
         warning(".shieldrc already exists — not overwriting")
         info("Delete it first if you want a fresh config")
         return
 
+    # Detect project type
+    has_flask      = any(Path(".").rglob("*.py")) and any(
+        "flask" in f.read_text(encoding='utf-8', errors='ignore').lower()
+        for f in list(Path(".").rglob("*.py"))[:10]
+    )
+    has_node       = Path("package.json").exists()
+    has_tests      = Path("tests").exists() or Path("test").exists()
+
+    # Create config
     create_default_config(".shieldrc")
-    success(".shieldrc created in current directory")
-    info("Edit it to customize SHIELD for this project")
-    info("Run 'shield scan .' to use it automatically")
+    success(".shieldrc created")
+
+    # Show what was detected
+    print()
+    info("Project detected:")
+    if has_flask:   info("  ✅ Python / Flask")
+    if has_node:    info("  ✅ Node.js / Express")
+    if has_tests:   info("  ✅ Tests folder found")
+
+    # Offer to add to .gitignore
+    gitignore = Path(".gitignore")
+    if gitignore.exists():
+        content = gitignore.read_text(encoding='utf-8')
+        if '.shieldrc' not in content:
+            print()
+            warning(".shieldrc may contain sensitive paths — add to .gitignore?")
+            info("Run: echo '.shieldrc' >> .gitignore")
+
+    print()
+    info("Next steps:")
+    info("  1. Edit .shieldrc to customize for this project")
+    info("  2. Run: shield scan .")
+    info("  3. Run: shield fix . --output ./fixed")
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 

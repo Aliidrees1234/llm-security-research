@@ -75,6 +75,7 @@ def detect_languages(path: str) -> list[str]:
 
 def cmd_scan(args):
     """shield scan <path> [--report report.html] [--json]"""
+    import time 
     import subprocess  # nosec B404 — hardcoded commands only
     import json as jsonlib
     from shield.reporter import (
@@ -86,6 +87,7 @@ def cmd_scan(args):
     )
     from shield.config import load_config
     cfg = load_config(str(args.path))
+    scan_start = time.time()
 
     # Apply config defaults where args not specified
     if not args.report and cfg.get('report'):
@@ -125,12 +127,15 @@ def cmd_scan(args):
     # ── Python scan via Bandit ─────────────────────────────────────────────
     if 'python' in languages:
         section("Python — Bandit 1.9.4")
+        t0 = time.time()
         cmd = [
             sys.executable, '-m', 'bandit',
             '-r', str(path),
             '-f', 'json', '-q'
         ]
         res = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603
+        elapsed = round(time.time() - t0, 2)
+        info(f"Scan completed in {elapsed}s")
         output = res.stdout or res.stderr
         json_start = output.find('{')
 
@@ -164,7 +169,7 @@ def cmd_scan(args):
                     info(f"    Line: {f.line}")
                     print()
 
-            if low:
+            if low and not (hasattr(args, 'quiet') and args.quiet):
                 print(f"\n{Fore.CYAN}  ── Low Severity Findings ──{Style.RESET_ALL}")
                 for f in low:
                     print(f"{Fore.CYAN}  ℹ️  [{f.rule_id}] {f.message}{Style.RESET_ALL}")
@@ -186,12 +191,15 @@ def cmd_scan(args):
     # ── JavaScript scan via Semgrep ────────────────────────────────────────
     if 'javascript' in languages or 'typescript' in languages:
         section("JavaScript / TypeScript — Semgrep p/nodejs")
+        t0 = time.time()
         try:
             cmd = ['semgrep', '--config=p/nodejs', '--json', str(path)]
             res = subprocess.run(  # nosec B603
                 cmd, capture_output=True, text=True, timeout=60,
                 encoding='utf-8', errors='replace'
             )
+            elapsed = round(time.time() - t0, 2)
+            info(f"Scan completed in {elapsed}s")
             output = res.stdout
             json_start = output.find('{')
 
@@ -260,13 +268,20 @@ def cmd_scan(args):
     if total_high > 0:
         error(f"BLOCKED — {total_high} High-severity finding(s) detected")
         error("Run 'shield fix <path>' to auto-remediate")
+        total_time = round(time.time() - scan_start, 2)
+        info(f"Total scan time: {total_time}s")
         sys.exit(1)
     elif total_medium > 0:
         warning(f"WARNING — {total_medium} Medium finding(s) — review recommended")
+        total_time = round(time.time() - scan_start, 2)
+        info(f"Total scan time: {total_time}s")
         sys.exit(0)
     else:
         success("CLEAN — No High or Medium findings detected")
+        total_time = round(time.time() - scan_start, 2)
+        info(f"Total scan time: {total_time}s")
         sys.exit(0)
+  
 
 # ── FIX COMMAND ───────────────────────────────────────────────────────────────
 
@@ -538,6 +553,12 @@ Examples:
     scan_parser.add_argument(
         "--json", action="store_true", default=False,
         help="Output results as JSON to terminal"
+    )
+    scan_parser.add_argument(
+        "--quiet", "-q",
+        action="store_true", 
+        default=False,
+        help="Only find High and Medium findings"
     )
 
     # ── fix ───────────────────────────────────────────────────────────────

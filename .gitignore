@@ -14,11 +14,8 @@ venv/
 .venv/
 env/
 
-# SHIELD results (generated — not committed)
+# SHIELD results
 shield_results/
-results/layer3_fdsp/working_copy/
-
-# Research working copies (never commit fixed versions over originals)
 research/results/*/working_copy/
 
 # OS

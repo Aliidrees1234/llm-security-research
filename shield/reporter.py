@@ -8,7 +8,7 @@ Usage:
   generate_report(findings, output_path="shield_report.html")
 
 Author: Ali Yasin Idrees
-Version: 0.4.0
+Version: 0.5.0
 """
 
 import json

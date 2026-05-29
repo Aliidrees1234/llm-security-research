@@ -5,9 +5,8 @@
 
 [![SHIELD Security Gate](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml/badge.svg)](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-blue)
-![Node.js](https://img.shields.io/badge/Node.js-Express-green)
-![Bandit](https://img.shields.io/badge/Bandit-1.9.4-red)
-![Semgrep](https://img.shields.io/badge/Semgrep-1.155.0-orange)
+![Version](https://img.shields.io/badge/SHIELD-v0.5.0-black)
+![Tests](https://img.shields.io/badge/tests-91%20passing-brightgreen)
 
 ---
 
@@ -106,46 +105,46 @@ llm-security-research/
 ## Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/Aliidrees1234/llm-security-research
 cd llm-security-research
-
-# Install SHIELD as a CLI tool
 pip install -e .
-
-# Verify installation
-shield version
 ```
-
----
 
 ## Usage
 
 ```bash
-# Scan a project for vulnerabilities
+# Scan a project
 shield scan ./my_project
 
-# Auto-fix vulnerabilities — safe copy
-shield fix ./my_project --output ./fixed
+# Scan with HTML report
+shield scan ./my_project --report report.html
 
-# Auto-fix directly in place
-shield fix ./my_project --inplace
+# Scan quietly (High/Medium only)
+shield scan ./my_project --quiet
 
-# Maximum FDSP iterations
+# Auto-fix vulnerabilities
 shield fix ./my_project --output ./fixed --k 3
-```
 
----
+# Fix with report
+shield fix ./my_project --output ./fixed --report after.html
+
+# Compare before and after
+shield compare before.json after.json --report comparison.html
+
+# Initialize config file
+shield init
+
+# Show version
+shield version
+```
 
 ## Run Tests
 
 ```bash
 pip install pytest
 pytest tests/ -v
+# 91 tests passing
 ```
-
-Expected output: 
-41 passed in 0.xx s
 -----
 
 ### Layer 2 — GRASP DAG (Prompt Enhancer)
@@ -257,6 +256,34 @@ All 20 tasks contained **zero security instructions** — measuring intrinsic mo
 | Bandit | 1.9.4 | Python Flask (all 6 corpora) | 22 March 2026 |
 | Semgrep | 1.155.0 | Node.js Express (all 6 corpora) | 25 March 2026 |
 | FDSP Engine | 1.0 | Python (3 without-SHIELD corpora) | 6 April 2026 |
+
+---
+## Changelog
+
+### v0.5.0
+- `.shieldrc` config file — project-level configuration
+- `shield init` — auto-generates config with project detection
+- `--quiet` flag — hides Low findings for cleaner output
+- Scan timing — shows how long each scan step took
+- MIT License — open for contributions
+- PyPI ready — `pip install shield-security`
+
+### v0.4.0
+- HTML scan reports with security grade
+- JSON export for programmatic use
+- `shield compare` — before/after comparison report
+
+### v0.3.0
+- Full AST engine — all 11 rules converted
+- 89 tests passing
+
+### v0.2.0
+- AST engine for B201, B602, B105
+- Hybrid fallback system
+
+### v0.1.0
+- CLI tool — shield scan, shield fix, shield version
+- 41 tests
 
 ---
 

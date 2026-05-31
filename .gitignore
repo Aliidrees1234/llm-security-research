@@ -28,3 +28,6 @@ Thumbs.db
 # Environment variables
 .env
 *.env
+
+# PyPI credentials
+.pypirc

@@ -14,7 +14,7 @@ Rule function signature:
       # returns (fixed_code, number_of_fixes_applied)
 
 Author: Ali Yasin Idrees
-Version: 0.1.0
+Version: 0.5.0
 """
 import re
 import ast
@@ -30,7 +30,7 @@ class RuleResult:
     def __init__(self, code: str, fixes: int,
                  strategy: str = "none", error: str = None):
         self.code     = code
-        self.fixes    = fixes
+        self.fixes    = fixes 
         self.strategy = strategy  # "ast", "regex", or "none"
         self.error    = error     # error message if fallback triggered
 
@@ -100,7 +100,7 @@ def _regex_B201(code: str) -> tuple[str, int]:
         lambda m: m.group(1) + "debug=False" + m.group(2),
         code
     )
-    code = re.sub(
+    code = re.sub( 
         r'app\.run\(\s*debug\s*=\s*True\s*\)',
         "app.run(debug=False, host='127.0.0.1', "
         "port=int(os.environ.get('PORT', 5000)))",

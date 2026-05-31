@@ -328,6 +328,8 @@ def cmd_fix(args):
         total_fixes    = sum(
             v for k, v in results.get('total_fixes', {}).items()
             if not k.endswith(('_strategy', '_error'))
+            and isinstance(v, int)
+
         )
 
         info(f"Baseline High:     {baseline_high}")

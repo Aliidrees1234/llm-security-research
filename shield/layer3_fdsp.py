@@ -20,6 +20,7 @@ Requirements:
 
 import os
 import re
+import ast
 import sys
 import json
 import shutil
@@ -205,20 +206,29 @@ def fdsp_loop(corpus_dir: str, output_dir: str, max_k: int = 3, inplace: bool = 
         py_files = list(work_dir.rglob('*.py'))
         iter_fixes = {}
         
-        for py_file in sorted(py_files):
-            try:
-                original_code = py_file.read_text(encoding='utf-8', errors='ignore')
-                fixed_code, fix_summary = apply_all_fixes(original_code)
-                
-                if fix_summary:
+    for py_file in sorted(py_files):
+        try:
+            original_code = py_file.read_text(encoding='utf-8', errors='ignore')
+            fixed_code, fix_summary = apply_all_fixes(original_code)
+
+            if fix_summary:
+                # POST-FIX SYNTAX VALIDATION
+                try:
+                    ast.parse(fixed_code)
+                    # Syntax valid — safe to write
                     py_file.write_text(fixed_code, encoding='utf-8')
                     print(f"    Fixed {py_file.name}: {fix_summary}")
                     for rule, count in fix_summary.items():
-                        iter_fixes[rule] = iter_fixes.get(rule, 0) + count
-                        total_fixes_all_k[rule] = total_fixes_all_k.get(rule, 0) + count
-                        
-            except Exception as e:
-                print(f"    Could not process {py_file.name}: {e}")
+                        if not rule.endswith(('_strategy', '_error')):
+                            iter_fixes[rule] = iter_fixes.get(rule, 0) + count
+                            total_fixes_all_k[rule] = total_fixes_all_k.get(rule, 0) + count
+                except SyntaxError as se:
+                    # Fix introduced syntax error — mark UNFIXABLE, do not write
+                    print(f"    ⚠️  UNFIXABLE {py_file.name}: post-fix syntax error at line {se.lineno}")
+                    iter_fixes[f'UNFIXABLE_{py_file.name}'] = 1
+
+        except Exception as e:
+            print(f"    Could not process {py_file.name}: {e}")
         
         # Re-scan
         print(f"    Re-scanning after K={k} fixes...")

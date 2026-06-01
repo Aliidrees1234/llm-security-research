@@ -76,7 +76,7 @@ def safe_apply(ast_fn, regex_fn, code: str, rule_id: str) -> RuleResult:
             fixed, count = regex_fn(code)
             return RuleResult(fixed, count, strategy="regex", error=error_msg)
         except Exception as re:
-            return RuleResult(code, 0, strategy="none",
+            return RuleResult(code, 0, strategy="UNFIXABLE",
                             error=f"{error_msg} | Regex also failed: {re}")
 
     # ── Regex fallback ─────────────────────────────────────────────────────
@@ -84,8 +84,9 @@ def safe_apply(ast_fn, regex_fn, code: str, rule_id: str) -> RuleResult:
         fixed, count = regex_fn(code)
         return RuleResult(fixed, count, strategy="regex")
     except Exception as e:
-        return RuleResult(code, 0, strategy="none",
-                        error=f"{rule_id} regex fallback failed: {e}")
+        #FAIL-CLOSED: regex fallback failed
+        return RuleResult(code, 0, strategy="UNFIXABLE",
+                        error=f"{rule_id} both strategies failed: {e}")
     
 
 
@@ -1164,6 +1165,55 @@ def _regex_sql(code: str) -> tuple[str, int]:
     return code, fixes
 
 
+class _EvalExecFixer(ast.NodeVisitor):
+    """
+    Detects eval() and exec() calls — dynamic execution = RCE risk.
+    Detection only — cannot auto-fix safely.
+    CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code.
+    """
+    DANGEROUS = {'eval', 'exec'}
+
+    def __init__(self):
+        self.findings = 0
+
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Name):
+            if node.func.id in self.DANGEROUS:
+                self.findings += 1
+        self.generic_visit(node)
+
+
+def fix_eval_exec(code: str) -> tuple[str, int]:
+    """
+    CUSTOM — eval_exec_detection
+    Severity: HIGH | CWE-95
+    Detect eval() and exec() — dynamic execution is RCE risk.
+    Flags for manual review — cannot auto-fix safely.
+    """
+    if not code.strip():
+        return code, 0
+
+    try:
+        tree = ast.parse(code)
+        detector = _EvalExecFixer()
+        detector.visit(tree)
+
+        if detector.findings > 0:
+            warning = (
+                "# SHIELD WARNING: eval()/exec() detected — RCE risk (CWE-95)\n"
+                "# Never pass user input to eval() or exec()\n"
+                "# Replace with explicit logic or safe alternatives\n"
+            )
+            return warning + code, detector.findings
+
+        return code, 0
+
+    except SyntaxError:
+        fixes = 0
+        if 'eval(' in code or 'exec(' in code:
+            fixes = 1
+        return code, fixes
+
 # ── REMEDIATION MAP ───────────────────────────────────────────────────────────
 # The FDSP engine iterates this map in order.
 # Add new rules here — no other file needs to change.
@@ -1187,4 +1237,5 @@ REMEDIATION_MAP = {
     # Custom rules — beyond Bandit's scope
     'CUSTOM_WERKZEUG': fix_werkzeug_weak_hash,
     'CUSTOM_SQL_FSTRING': fix_sql_fstring,
+    'CUSTOM_EVAL_EXEC': fix_eval_exec,
 }

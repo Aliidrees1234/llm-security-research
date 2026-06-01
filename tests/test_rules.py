@@ -625,6 +625,26 @@ class TestSQLFstringASTRobustness:
         fixed, count = _regex_sql(code)
         assert count > 0
 
+class TestEvalExec:
+    def test_detects_eval(self):
+        from shield.rules.custom_rules import fix_eval_exec
+        code = "result = eval(user_input)"
+        fixed, count = fix_eval_exec(code)
+        assert count > 0
+        assert "SHIELD WARNING" in fixed
+
+    def test_detects_exec(self):
+        from shield.rules.custom_rules import fix_eval_exec
+        code = "exec(user_code)"
+        fixed, count = fix_eval_exec(code)
+        assert count > 0
+
+    def test_no_false_positive(self):
+        from shield.rules.custom_rules import fix_eval_exec
+        code = "x = evaluate_score(data)"
+        fixed, count = fix_eval_exec(code)
+        assert count == 0
+
 # ══════════════════════════════════════════════════════════════════════════════
 # REMEDIATION MAP — structural tests
 # ══════════════════════════════════════════════════════════════════════════════

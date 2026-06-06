@@ -1214,6 +1214,122 @@ def fix_eval_exec(code: str) -> tuple[str, int]:
             fixes = 1
         return code, fixes
 
+class _UnicodeObfuscationFixer(ast.NodeVisitor):
+    """
+    Detects zero-width and invisible Unicode characters in string literals.
+    Used in supply chain attacks to hide malicious code from code review.
+    CWE-116: Improper Encoding or Escaping of Output.
+    """
+    SUSPICIOUS_CHARS = {
+        '\u200b', '\u200c', '\u200d', '\u200e', '\u200f',
+        '\u2060', '\u2061', '\u2062', '\u2063', '\u2064',
+        '\ufeff', '\u00ad', '\u034f', '\u115f', '\u1160',
+    }
+
+    def __init__(self):
+        self.findings = 0
+
+    def visit_Constant(self, node):
+        if isinstance(node.value, str):
+            if any(c in node.value for c in self.SUSPICIOUS_CHARS):
+                self.findings += 1
+        self.generic_visit(node)
+
+def fix_unicode_obfuscation(code: str) -> tuple[str, int]:
+    """
+    CUSTOM — unicode_obfuscation
+    Severity: HIGH | CWE-116
+    Detect zero-width Unicode characters used to hide malicious code.
+    Common in supply chain attacks (TrapDoor campaign, May 2026).
+    """
+    if not code.strip():
+        return code, 0
+
+    try:
+        tree = ast.parse(code)
+        detector = _UnicodeObfuscationFixer()
+        detector.visit(tree)
+
+        if detector.findings > 0:
+            warning = (
+                "# SHIELD WARNING: Zero-width Unicode characters detected (CWE-116)\n"
+                "# This is a supply chain attack indicator — review immediately\n"
+                "# Reference: TrapDoor campaign, May 2026\n"
+            )
+            return warning + code, detector.findings
+
+        return code, 0
+
+    except SyntaxError:
+        # Regex fallback — check raw bytes
+        suspicious = ['\u200b', '\u200c', '\u200d', '\ufeff', '\u2060']
+        fixes = sum(1 for c in suspicious if c in code)
+        return code, fixes
+    
+
+class _InstallExecFixer(ast.NodeVisitor):
+    """
+    Detects code that executes at import/install time.
+    Supply chain attacks use this to run malicious code when package is installed.
+    CWE-506: Embedded Malicious Code.
+    Flags: os.system(), subprocess at module level, urllib/requests at module level.
+    """
+    DANGEROUS_MODULE_LEVEL = {
+        'system', 'popen', 'urlopen', 'urlretrieve',
+        'get', 'post', 'download',
+    }
+
+    def __init__(self):
+        self.findings = 0
+        self._in_function = False
+
+    def visit_FunctionDef(self, node):
+        old = self._in_function
+        self._in_function = True
+        self.generic_visit(node)
+        self._in_function = old
+
+    def visit_AsyncFunctionDef(self, node):
+        self.visit_FunctionDef(node)
+
+    def visit_Call(self, node):
+        if not self._in_function:
+            if isinstance(node.func, ast.Attribute):
+                if node.func.attr in self.DANGEROUS_MODULE_LEVEL:
+                    self.findings += 1
+            elif isinstance(node.func, ast.Name):
+                if node.func.id in {'eval', 'exec', '__import__'}:
+                    self.findings += 1
+        self.generic_visit(node)
+
+def fix_install_exec(code: str) -> tuple[str, int]:
+    """
+    CUSTOM — install_time_execution
+    Severity: HIGH | CWE-506
+    Detect code that executes network calls or system commands at module level.
+    Used in supply chain attacks to exfiltrate credentials on pip install.
+    """
+    if not code.strip():
+        return code, 0
+
+    try:
+        tree = ast.parse(code)
+        detector = _InstallExecFixer()
+        detector.visit(tree)
+
+        if detector.findings > 0:
+            warning = (
+                "# SHIELD WARNING: Module-level execution detected (CWE-506)\n"
+                "# Code running at import time is a supply chain attack indicator\n"
+                "# Move all execution inside functions or __main__ guard\n"
+            )
+            return warning + code, detector.findings
+
+        return code, 0
+
+    except SyntaxError:
+        return code, 0
+
 # ── REMEDIATION MAP ───────────────────────────────────────────────────────────
 # The FDSP engine iterates this map in order.
 # Add new rules here — no other file needs to change.
@@ -1238,4 +1354,6 @@ REMEDIATION_MAP = {
     'CUSTOM_WERKZEUG': fix_werkzeug_weak_hash,
     'CUSTOM_SQL_FSTRING': fix_sql_fstring,
     'CUSTOM_EVAL_EXEC': fix_eval_exec,
+    'CUSTOM_UNICODE_OBFUSCATION': fix_unicode_obfuscation,
+    'CUSTOM_INSTALL_EXEC': fix_install_exec,
 }

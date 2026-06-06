@@ -539,7 +539,7 @@ def cmd_prompt(args):
         if args.copy:
             try:
                 import subprocess  # nosec B404
-                subprocess.run(  # nosec B603
+                subprocess.run(  # nosec B603 B607 — clip is a known Windows system command
                     ['clip'],
                     input=secured.encode('utf-8'),
                     check=True

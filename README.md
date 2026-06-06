@@ -6,7 +6,7 @@
 [![SHIELD Security Gate](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml/badge.svg)](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-blue)
 ![Version](https://img.shields.io/badge/SHIELD-v0.5.0-black)
-![Tests](https://img.shields.io/badge/tests-94%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)
 
 ---
 
@@ -143,7 +143,7 @@ shield version
 ```bash
 pip install pytest
 pytest tests/ -v
-# 94 tests passing
+# 99 tests passing
 ```
 -----
 
@@ -158,6 +158,12 @@ engine = GRASPEngine()
 prompt = "Write a Flask login endpoint with SQLite"
 secured = engine.build_secured_prompt(prompt)
 # Send secured to your LLM instead of the raw prompt
+---
+# Generate security-hardened prompt for any LLM
+shield prompt "Write a Flask login endpoint"
+
+# Copy directly to clipboard
+shield prompt "Write a Flask login endpoint" --copy
 ```
 
 ### Layer 3 — FDSP Auto-Remediation
@@ -256,13 +262,6 @@ All 20 tasks contained **zero security instructions** — measuring intrinsic mo
 | Bandit | 1.9.4 | Python Flask (all 6 corpora) | 22 March 2026 |
 | Semgrep | 1.155.0 | Node.js Express (all 6 corpora) | 25 March 2026 |
 | FDSP Engine | 1.0 | Python (3 without-SHIELD corpora) | 6 April 2026 |
-
----
-# Generate security-hardened prompt for any LLM
-shield prompt "Write a Flask login endpoint"
-
-# Copy directly to clipboard
-shield prompt "Write a Flask login endpoint" --copy
 
 ---
 ## Changelog

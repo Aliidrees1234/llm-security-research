@@ -5,7 +5,7 @@
 
 [![SHIELD Security Gate](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml/badge.svg)](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-blue)
-![Version](https://img.shields.io/badge/SHIELD-v0.5.0-black)
+![Version](https://img.shields.io/badge/SHIELD-v0.7.0-black)
 ![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)
 
 ---

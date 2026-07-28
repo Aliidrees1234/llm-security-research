@@ -5,7 +5,11 @@
 
 [![SHIELD Security Gate](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml/badge.svg)](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-blue)
+<<<<<<< HEAD
+![Version](https://img.shields.io/badge/SHIELD-v0.8.0-black)
+=======
 ![Version](https://img.shields.io/badge/SHIELD-v0.7.0-black)
+>>>>>>> 3e4a8b6fd3b89ccc3960c277fd510485e8d142f2
 ![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)
 
 ---
@@ -64,7 +68,7 @@ A five-layer security architecture spanning the complete lifecycle of LLM-assist
 | Layer | File | Status |
 |-------|------|--------|
 | Layer 1 | Built into prompts | ✅ Empirically Validated |
-| Layer 2 | `shield_layer2_grasp.py` | ✅ Implemented |
+| Layer 2 | `shield_layer2_grasp.py` | ✅ CLI Integrated |
 | Layer 3 | `shield_layer3_fdsp.py` | ✅ Empirically Validated |
 | Layer 4 | `.github/workflows/shield_layer4_gate.yml` | ✅ Live on this repo |
 | Layer 5 | `shield_layer5_runtime.py` | ✅ Implemented |
@@ -223,6 +227,11 @@ The engine was designed for up to K=3 iterations. All three models reached **zer
 
 ### 4. Temporal Audit
 Seven major LLM security citations were mis-dated (2026 instead of 2025). Corrected dates documented in Chapter 2. The year 2026 represents **industrial adoption**, not discovery.
+
+### 5. Supply Chain Attack Detection (2026)
+Two new rules targeting the 2026 wave of registry poisoning attacks:
+- `CUSTOM_UNICODE_OBFUSCATION` — detects zero-width Unicode characters (TrapDoor campaign)
+- `CUSTOM_INSTALL_EXEC` — detects module-level execution at import time
 
 ---
 

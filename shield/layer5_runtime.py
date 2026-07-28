@@ -63,6 +63,7 @@ PROMPT_INJECTION_PATTERNS = [
     r'eval\s*\(',
     r'exec\s*\(',
     r'__import__\s*\(',
+    r'you are now\s+a?\s*\w+',
 ]
 
 _COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in PROMPT_INJECTION_PATTERNS]

@@ -1,0 +1,16 @@
+{
+  "shield_version": "0.3.0",
+  "timestamp": "2026-07-28T18:08:49.966490",
+  "corpus": "Write a Flask login endpoint with SQLite authentication",
+  "loc": 24,
+  "languages": [],
+  "grade": "A+",
+  "i100l": 0.0,
+  "summary": {
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "total": 0
+  },
+  "findings": []
+}

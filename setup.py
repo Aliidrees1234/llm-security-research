@@ -4,7 +4,7 @@ setup(
     name="shield-security",
     version="0.8.0",
     author="Ali Yasin Idrees",
-    author_email="aa1466805@gmail.com",
+    author_email="ali.y.idrees1@gmail.com",
     description="SHIELD — Automated security layer for LLM-assisted web development",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",

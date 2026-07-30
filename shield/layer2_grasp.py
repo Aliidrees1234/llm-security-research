@@ -1,5 +1,5 @@
 """
-SHIELD FRAMEWORK — LAYER 2: GRASP DAG
+SHIELD FRAMEWORK - LAYER 2: GRASP DAG
 ======================================
 Graph-based Reasoning for Assured Secure Programming.
 
@@ -41,7 +41,7 @@ class SCPNode:
     depends_on:  list[str] = field(default_factory=list)  # other SCP IDs that must also apply
 
 
-# ── GRASP DAG — EIGHT NODES ───────────────────────────────────────────────────
+# ── GRASP DAG - EIGHT NODES ───────────────────────────────────────────────────
 
 GRASP_DAG: list[SCPNode] = [
 
@@ -73,8 +73,8 @@ GRASP_DAG: list[SCPNode] = [
         ],
         constraint = (
             "MANDATORY: Load ALL secrets from environment variables. "
-            "Use: os.environ.get('FLASK_SECRET_KEY') — NEVER hardcode. "
-            "Use: os.environ.get('JWT_SECRET') — NEVER hardcode. "
+            "Use: os.environ.get('FLASK_SECRET_KEY') - NEVER hardcode. "
+            "Use: os.environ.get('JWT_SECRET') - NEVER hardcode. "
             "Validate at startup: if not secret_key: raise RuntimeError('...')"
         ),
         cwe_ids  = ["CWE-259", "CWE-798"],
@@ -182,7 +182,7 @@ GRASP_DAG: list[SCPNode] = [
             "encrypt", "random", "token", "salt", "hashing",
         ],
         constraint = (
-            "MANDATORY: Use bcrypt or Argon2 for password hashing — NEVER MD5, SHA1, or SHA256 for passwords. "
+            "MANDATORY: Use bcrypt or Argon2 for password hashing - NEVER MD5, SHA1, or SHA256 for passwords. "
             "Python: bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)) "
             "Node.js: await bcrypt.hash(password, 12) "
             "For random tokens: use secrets.token_urlsafe(32) in Python, crypto.randomBytes(32) in Node.js. "
@@ -208,7 +208,7 @@ GRASP_DAG: list[SCPNode] = [
             "MANDATORY: Validate ALL user input before processing. "
             "Enforce: type checking, length limits (username <= 64, password <= 128), "
             "charset whitelisting (regex for usernames), and required-field checks. "
-            "Return 400 with a generic error on invalid input — NEVER echo raw input back. "
+            "Return 400 with a generic error on invalid input - NEVER echo raw input back. "
             "NEVER expose stack traces or internal errors to users."
         ),
         cwe_ids  = ["CWE-20", "CWE-209"],
@@ -225,26 +225,26 @@ GRASP_DAG: list[SCPNode] = [
 
 class GRASPEngine:
     """
-    GRASP DAG Engine — analyzes prompts and injects relevant SCP constraints.
+    GRASP DAG Engine - analyzes prompts and injects relevant SCP constraints.
     
     This is the SHIELD Layer 2 implementation.
     Layer 1 SPT provides the base 9 rules always.
     Layer 2 GRASP adds task-specific additional constraints.
     """
     
-    # SHIELD Layer 1 SPT — always applied (baseline)
+    # SHIELD Layer 1 SPT - always applied (baseline)
     LAYER1_SPT = """
-SECURITY PROMPT TEMPLATE (SHIELD Layer 1 — Mandatory):
+SECURITY PROMPT TEMPLATE (SHIELD Layer 1 - Mandatory):
 You are generating code for a PRODUCTION web application.
 Security is NON-NEGOTIABLE. Apply ALL rules below:
 
-[ ] NEVER set debug=True — always use debug=False
-[ ] NEVER hardcode passwords, secret keys, or API tokens — use os.environ.get()
-[ ] ALWAYS use parameterized queries — never string concatenation for SQL
+[ ] NEVER set debug=True - always use debug=False
+[ ] NEVER hardcode passwords, secret keys, or API tokens - use os.environ.get()
+[ ] ALWAYS use parameterized queries - never string concatenation for SQL
 [ ] ALWAYS validate file paths: use os.path.realpath() + startsWith() boundary check
-[ ] NEVER use shell=True in subprocess calls — use whitelist approach
+[ ] NEVER use shell=True in subprocess calls - use whitelist approach
 [ ] Use secrets module NOT random for security-sensitive values
-[ ] Use bcrypt or Argon2 for password hashing — NEVER MD5 or SHA1
+[ ] Use bcrypt or Argon2 for password hashing - NEVER MD5 or SHA1
 [ ] ALWAYS escape user input before rendering in HTML responses
 [ ] NEVER expose stack traces or debug info to end users
 """.strip()
@@ -266,7 +266,7 @@ Security is NON-NEGOTIABLE. Apply ALL rules below:
                         triggered_ids.add(node.node_id)
                     break
         
-        # Resolve dependencies — add required nodes not yet triggered
+        # Resolve dependencies - add required nodes not yet triggered
         to_add = []
         for node in triggered:
             for dep_id in node.depends_on:
@@ -288,7 +288,7 @@ Security is NON-NEGOTIABLE. Apply ALL rules below:
         lines = [self.LAYER1_SPT, ""]
         
         if triggered:
-            lines.append("GRASP LAYER 2 — Task-Specific Security Constraints:")
+            lines.append("GRASP LAYER 2 - Task-Specific Security Constraints:")
             lines.append(f"(Triggered nodes: {', '.join(n.node_id for n in triggered)})")
             lines.append("")
             
@@ -314,7 +314,7 @@ Security is NON-NEGOTIABLE. Apply ALL rules below:
         lines = [f"Triggered {len(triggered)} GRASP node(s):"]
         for node in triggered:
             matching = [t for t in node.triggers if t.lower() in prompt.lower()]
-            lines.append(f"  {node.node_id} ({node.name}) — matched: {matching[:3]}")
+            lines.append(f"  {node.node_id} ({node.name}) - matched: {matching[:3]}")
         return "\n".join(lines)
 
 
@@ -331,7 +331,7 @@ if __name__ == "__main__":
         "Create a comment system with HTML display",
     ]
     
-    print("SHIELD LAYER 2 — GRASP DAG ENGINE TEST")
+    print("SHIELD LAYER 2 - GRASP DAG ENGINE TEST")
     print("=" * 60)
     
     for prompt in test_prompts:

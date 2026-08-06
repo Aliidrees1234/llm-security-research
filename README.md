@@ -6,9 +6,9 @@
 [![SHIELD Security Gate](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml/badge.svg)](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-blue)
 <<<<<<< HEAD
-![Version](https://img.shields.io/badge/SHIELD-v0.8.0-black)
+![Version](https://img.shields.io/badge/SHIELD-v0.9.0-black)
 =======
-![Version](https://img.shields.io/badge/SHIELD-v0.7.0-black)
+![Version](https://img.shields.io/badge/SHIELD-v0.9.0-black)
 >>>>>>> 3e4a8b6fd3b89ccc3960c277fd510485e8d142f2
 ![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)
 
@@ -68,10 +68,10 @@ A five-layer security architecture spanning the complete lifecycle of LLM-assist
 | Layer | File | Status |
 |-------|------|--------|
 | Layer 1 | Built into prompts | ✅ Empirically Validated |
-| Layer 2 | `shield_layer2_grasp.py` | ✅ CLI Integrated |
-| Layer 3 | `shield_layer3_fdsp.py` | ✅ Empirically Validated |
-| Layer 4 | `.github/workflows/shield_layer4_gate.yml` | ✅ Live on this repo |
-| Layer 5 | `shield_layer5_runtime.py` | ✅ Implemented |
+| Layer 2 | `shield/layer2_grasp.py` | ✅ CLI Integrated — `shield prompt` |
+| Layer 3 | `shield/layer3_fdsp.py` | ✅ Empirically Validated — `shield fix` |
+| Layer 4 | `.github/workflows/shield_layer4_gate.yml` | ✅ Live CI/CD gate |
+| Layer 5 | `shield/layer5_runtime.py` | ✅ CLI Integrated — `shield monitor` |
 
 ---
 
@@ -79,28 +79,36 @@ A five-layer security architecture spanning the complete lifecycle of LLM-assist
 
 ```
 llm-security-research/
+│── .github/workflows
+|     ├──shield_layer4_gate.yml
+├── shield/                   
+│   ├── cli.py
+│   ├── reporter.py
+│   ├── config.py
+│   ├── layer2_grasp.py
+│   ├── layer3_fdsp.py
+│   ├── layer5_runtime.py
+│   └── rules/
+│       └── custom_rules.py
 │
-├── .github/workflows/
-│   └── shield_layer4_gate.yml        # SHIELD Layer 4 — CI/CD gate (LIVE)
+├── research/                  ← all research data
+│   ├── paper/
+│   ├── snippets/
+│   └── results/
 │
-├── snippets/                          # Generated code corpora
-│   ├── chatgpt/                       # GPT-5 mini without SHIELD
-│   ├── claude/                        # Claude S.4.6 without SHIELD
-│   ├── gemini/                        # Gemini 3 Flash without SHIELD
-│   ├── chatgpt_shield/                # GPT-5 mini with SHIELD Layer 1
-│   ├── claude_shield/                 # Claude S.4.6 with SHIELD Layer 1
-│   └── gemini_shield/                 # Gemini 3 Flash with SHIELD Layer 1
+├── tests/                     ← all tests
+├── docs/                      ← NEW: documentation
+│   ├── rules.md               ← explain every rule
+│   ├── pipeline.md            ← explain L2+L3 flow
+│   └── api.md                 ← developer API reference
 │
-├── results/layer3_fdsp/
-│   └── fdsp_master_results.json       # Layer 3 validation raw results
+├── examples/                  ← NEW: real usage examples
+│   ├── flask_login.py         ← vulnerable → fixed demo
+│   └── node_download.js       ← vulnerable → fixed demo
 │
-├── shield_layer2_grasp.py             # SHIELD Layer 2 — GRASP DAG
-├── shield_layer3_fdsp.py              # SHIELD Layer 3 — FDSP engine
-├── shield_layer5_runtime.py           # SHIELD Layer 5 — runtime monitoring
-│
-├── LLM_Security_Research_In_Web_Applications # Full research paper
-├── LLM_Security_Research_FINAL.xlsx     # Results dashboard
-└── README.md
+├── setup.py
+├── README.md
+
 ```
 
 ---
@@ -141,6 +149,18 @@ shield init
 # Show version
 shield version
 ```
+# Full pipeline — prompt → generate → scan → fix
+shield secure "Write a Flask login endpoint with SQLite"
+
+# Secure prompt 
+shield secure "Write a Flask login endpoint"
+
+# Runtime monitor self-test
+shield monitor --test
+
+# Show WAF rules
+shield monitor --show-rules
+
 
 ## Run Tests
 

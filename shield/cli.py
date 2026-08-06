@@ -36,7 +36,7 @@ BANNER = f"""
 ║   {Fore.WHITE}╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝{Fore.WHITE}               ║
 ║                                                              ║
 ║   {Fore.WHITE}Security Layer for LLM-assisted Development{Fore.WHITE}              ║
-║   {Fore.WHITE}v0.8.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
+║   {Fore.WHITE}v0.9.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}"""
 
@@ -521,41 +521,6 @@ def cmd_init(args):
     info("  2. Run: shield scan .")
     info("  3. Run: shield fix . --output ./fixed")
 
-def cmd_prompt(args):
-    """shield prompt <task>"""
-    from shield.layer2_grasp import GRASPEngine
-
-    if sys.stdout.isatty():
-        print_banner()
-
-    section(f"SHIELD LAYER 2 — GRASP PROMPT BUILDER")
-
-    try:
-        engine = GRASPEngine()
-        secured = engine.build_secured_prompt(args.task)
-
-        print(f"\n{Fore.WHITE}{secured}{Style.RESET_ALL}")
-
-        if args.copy:
-            try:
-                import subprocess  # nosec B404
-                p = subprocess.Popen(  # nosec B603 B607
-                    ['powershell', '-command', '$input | Set-Clipboard'],
-                    stdin=subprocess.PIPE
-                )
-                p.communicate(input=secured.encode('utf-8'))
-                print()
-                success("Copied to clipboard — paste into your LLM")
-            except Exception:
-                warning("Could not copy to clipboard — copy manually")
-        else:
-            print()
-            info("Tip: use --copy to copy directly to clipboard")
-            info("Paste this into Claude, ChatGPT, or Gemini instead of your raw prompt")
-
-    except Exception as e:
-        error(f"Prompt generation failed: {e}")
-        sys.exit(1)
 
 def cmd_monitor(args):
     """shield monitor --test"""
@@ -728,11 +693,8 @@ def cmd_secure(args):
 
     # Copy to clipboard
     try:
-        import subprocess  # nosec B404
-        subprocess.run(  # nosec B603 B607
-            ['powerShell', '-Command', 'Set-Clipboard', secured],
-            check=True
-        )
+        import pyperclip
+        pyperclip.copy(secured)
         success("Secured prompt copied to clipboard")
     except Exception:
         info("Copy the prompt above manually")
@@ -941,21 +903,7 @@ Examples:
         help="Create a .shieldrc config file in current directory"
     )
 
-    # ── prompt ────────────────────────────────────────────────────────────────
-    prompt_parser = subparsers.add_parser(
-        "prompt",
-        help="Generate a security-hardened prompt for any LLM"
-    )
-    prompt_parser.add_argument(
-        "task",
-        help="Your coding task (e.g. 'Write a Flask login endpoint')"
-    )
-    prompt_parser.add_argument(
-        "--copy",
-        action="store_true",
-        default=False,
-        help="Copy result to clipboard"
-    )
+
 
     # ── monitor ───────────────────────────────────────────────────────────────
     monitor_parser = subparsers.add_parser(
@@ -1008,8 +956,7 @@ Examples:
         cmd_version(args)
     elif args.command == "init":
      cmd_init(args)
-    elif args.command == "prompt":
-     cmd_prompt(args)
+
     elif args.command == "monitor":
      cmd_monitor(args)
     elif args.command == "secure":

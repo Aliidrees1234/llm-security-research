@@ -7,7 +7,7 @@
 # Runs pytest to ensure all 41 tests pass.
 #
 # Author: Ali Yasin Idrees
-# Version: 0.1.0
+# Version: 0.9.0
 # ============================================================
 
 name: SHIELD Security Gate

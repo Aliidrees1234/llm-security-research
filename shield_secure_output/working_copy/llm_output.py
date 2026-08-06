@@ -3,25 +3,25 @@
 # Move all execution inside functions or __main__ guard
 import os
 import re
-import sqlite3
-from flask import Flask, request, jsonify, session, g
-from werkzeug.security import check_password_hash, generate_password_hash
+import sys
+import logging
+from flask import Flask, request, jsonify, render_template_string
+import bcrypt
+
+# Configure logging to hide sensitive debug info from end-users
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# [SCP-02] Load and validate secret key from environment at startup
+# [SCP-02: Secret Key Validation]
 SECRET_KEY = os.environ.get('FLASK_SECRET_KEY')
 if not SECRET_KEY:
-    raise RuntimeError("CRITICAL: FLASK_SECRET_KEY environment variable is not set.")
+    logger.critical("FATAL: FLASK_SECRET_KEY environment variable is missing.")
+    sys.exit(1)
 
 app.secret_key = SECRET_KEY
 
-# Configure session security flags
-app.config.update(
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_SECURE=True  # Ensure HTTPS in production
-)
-
-DATABASE = os.environ.get('DATABASE_PATH', 'app.db')
-USERNAME_RE = re.compile(r'^[a-zA-Z0-9_]{3,32}$')
+# Input validation rules [SCP-08]
+USERNAME_REGEX = re.compile(r'^[a-zA-Z0-9_\-\.]{3,32}$')
+MAX_PASSWORD_LENGTH = 128

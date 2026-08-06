@@ -665,25 +665,19 @@ def cmd_monitor(args):
 
 
 def cmd_secure(args):
-    """shield secure <task> — full pipeline L2 + L3"""
-    import tempfile
-    import os
-    from shield.layer2_grasp import GRASPEngine
-    from shield.layer3_fdsp import fdsp_loop
-    from shield.reporter import (
-        ScanResult, generate_report,
-        parse_bandit_to_result, save_json_report
-    )
+    """shield secure <task> — build secured prompt and open browser"""
+    import webbrowser
 
     if sys.stdout.isatty():
         print_banner()
 
-    section(f"SHIELD SECURE PIPELINE")
+    section(f"SHIELD SECURE — LAYER 2 + LAYER 3 PIPELINE")
     info(f"Task: {args.task}")
     print()
 
     # ── STEP 1: Layer 2 — Build secured prompt ─────────────────────────────
-    section("STEP 1 — LAYER 2: GRASP PROMPT BUILDER")
+    section("STEP 1 — LAYER 2: BUILDING SECURED PROMPT")
+    from shield.layer2_grasp import GRASPEngine
     engine  = GRASPEngine()
     secured = engine.build_secured_prompt(args.task)
 
@@ -691,126 +685,41 @@ def cmd_secure(args):
     print(secured)
     print(f"{'─'*60}{Style.RESET_ALL}\n")
 
-    # Copy to clipboard
+    # ── STEP 2: Copy to clipboard ──────────────────────────────────────────
+    section("STEP 2 — COPYING PROMPT TO CLIPBOARD")
     try:
         import pyperclip
         pyperclip.copy(secured)
         success("Secured prompt copied to clipboard")
     except Exception:
-        info("Copy the prompt above manually")
+        warning("Could not copy — copy the prompt above manually")
 
-    # ── STEP 2: Wait for LLM output ────────────────────────────────────────
-    section("STEP 2 — PASTE LLM OUTPUT")
-    info("1. Paste the secured prompt into Claude, ChatGPT, or Gemini")
-    info("2. Copy the generated code")
-    info("3. Paste it below and press Enter twice when done")
+    # ── STEP 3: Open browser ───────────────────────────────────────────────
+    section("STEP 3 — NEXT STEPS")
     print()
 
-    lines = []
-    print(f"{Fore.YELLOW}  Paste code here (press Enter twice to finish):{Style.RESET_ALL}")
-    while True:
-        try:
-            line = input()
-            if line == "" and lines and lines[-1] == "":
-                break
-            lines.append(line)
-        except EOFError:
-            break
-
-    if not lines:
-        error("No code provided — exiting")
-        sys.exit(1)
-
-    llm_code = "\n".join(lines).strip()
-    info(f"Received {len(llm_code)} characters of LLM-generated code")
-
-    # ── STEP 3: Save to temp file and scan ─────────────────────────────────
-    section("STEP 3 — LAYER 3: SCANNING LLM OUTPUT")
-
-    # Save to temp directory
-    temp_dir = Path(tempfile.mkdtemp())
-    temp_file = temp_dir / "llm_output.py"
-    temp_file.write_text(llm_code, encoding='utf-8')
-
-    # Run FDSP
-    output_dir = str(Path(args.output))
-    results = fdsp_loop(
-        corpus_dir=str(temp_dir),
-        output_dir=output_dir,
-        max_k=3,
-        inplace=False
-    )
-
-    summary        = results.get('summary', {})
-    baseline_high  = summary.get('baseline_high', 0)
-    final_high     = summary.get('final_high', 0)
-    baseline_i100l = summary.get('baseline_I100L', 0)
-    final_i100l    = summary.get('final_I100L', 0)
-    total_fixes    = sum(
-        v for k, v in results.get('total_fixes', {}).items()
-        if not k.endswith(('_strategy', '_error')) and isinstance(v, int)
-    )
-
-    # ── STEP 4: Show results ────────────────────────────────────────────────
-    section("STEP 4 — RESULTS")
-
-    info(f"Baseline High:     {baseline_high}")
-    info(f"Final High:        {final_high}")
-    info(f"Baseline I/100L:   {baseline_i100l}")
-    info(f"Final I/100L:      {final_i100l}")
-    info(f"Auto-fixes applied: {total_fixes}")
-    print()
-
-    if total_fixes > 0:
-        section("FIXES APPLIED")
-        for rule, count in results.get('total_fixes', {}).items():
-            if not rule.endswith(('_strategy', '_error')) and isinstance(count, int):
-                success(f"[{rule}] {count} fix(es) applied")
-
-    print()
-    if final_high == 0 and baseline_high == 0:
-        success("Layer 2 worked — LLM generated clean code")
-        success("Zero High-severity findings detected")
-    elif final_high == 0:
-        success(f"Layer 3 fixed {baseline_high} High finding(s)")
-        success("Zero High-severity findings remaining")
+    if args.claude:
+        webbrowser.open('https://claude.ai')
+        success("Opening claude.ai in browser")
+    elif args.chatgpt:
+        webbrowser.open('https://chat.openai.com')
+        success("Opening ChatGPT in browser")
+    elif args.gemini:
+        webbrowser.open('https://gemini.google.com')
+        success("Opening Gemini in browser")
     else:
-        warning(f"{final_high} High finding(s) remain — manual review needed")
+        info("Open your preferred LLM:")
+        info("  Claude:  https://claude.ai")
+        info("  ChatGPT: https://chat.openai.com")
+        info("  Gemini:  https://gemini.google.com")
 
-    # ── STEP 5: Show fixed code ─────────────────────────────────────────────
-    fixed_file = Path(output_dir) / 'working_copy' / 'llm_output.py'
-    if fixed_file.exists():
-        section("FIXED CODE")
-        print(f"\n{Fore.GREEN}{fixed_file.read_text(encoding='utf-8')}{Style.RESET_ALL}")
-
-    # ── STEP 6: Generate report ─────────────────────────────────────────────
-    if args.report:
-        import subprocess  # nosec B404
-        import json as jsonlib
-
-        cmd = [
-            sys.executable, '-m', 'bandit',
-            '-r', str(Path(output_dir) / 'working_copy'),
-            '-f', 'json', '-q'
-        ]
-        res = subprocess.run(  # nosec B603
-            cmd, capture_output=True, text=True
-        )
-        output = res.stdout or res.stderr
-        json_start = output.find('{')
-        if json_start >= 0:
-            data         = jsonlib.loads(output[json_start:])
-            loc          = len(llm_code.splitlines())
-            scan_result  = parse_bandit_to_result(data, args.task, loc)
-            report_path  = generate_report(scan_result, args.report)
-            save_json_report(scan_result, args.report.replace('.html', '.json'))
-            print()
-            success(f"Report saved: {report_path}")
-
-    section("PIPELINE COMPLETE")
-    info("Layer 2 secured the prompt before generation")
-    info("Layer 3 fixed remaining issues after generation")
-    info(f"CPMF: $0.00 — zero API calls, fully local")
+    print()
+    info("1. Paste the secured prompt (already in clipboard)")
+    info("2. Copy the generated code")
+    info("3. Save it to a file — e.g. output.py")
+    info("4. Run: shield fix ./output.py --report report.html")
+    print()
+    success("Pipeline ready — paste and generate")
 
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
@@ -927,21 +836,29 @@ Examples:
     # ── secure ────────────────────────────────────────────────────────────────
     secure_parser = subparsers.add_parser(
         "secure",
-        help="Full SHIELD pipeline: prompt → generate → scan → fix"
+        help="Build secured prompt and open LLM in browser"
     )
     secure_parser.add_argument(
         "task",
         help="Your coding task description"
     )
     secure_parser.add_argument(
-        "--output",
-        default="shield_secure_output",
-        help="Output directory for fixed files"
+        "--claude",
+        action="store_true",
+        default=False,
+        help="Open claude.ai in browser"
     )
     secure_parser.add_argument(
-        "--report",
-        default="shield_secure_report.html",
-        help="HTML report path"
+        "--chatgpt",
+        action="store_true",
+        default=False,
+        help="Open ChatGPT in browser"
+    )
+    secure_parser.add_argument(
+        "--gemini",
+        action="store_true",
+        default=False,
+        help="Open Gemini in browser"
     )
     # ── parse and dispatch ─────────────────────────────────────────────────
     args = parser.parse_args()

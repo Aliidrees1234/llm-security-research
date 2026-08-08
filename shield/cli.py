@@ -305,6 +305,15 @@ def cmd_fix(args):
         error(f"Path not found: {args.path}")
         sys.exit(1)
 
+    # If single file — wrap in temp folder
+    if path.is_file():
+        import tempfile
+        import shutil
+        temp_dir = Path(tempfile.mkdtemp())
+        shutil.copy(path, temp_dir / path.name)
+        info(f"Single file detected — scanning {path.name}")
+        path = temp_dir
+        
     if args.inplace:
         warning("INPLACE MODE — original files will be modified directly")
     else:

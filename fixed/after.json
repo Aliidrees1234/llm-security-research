@@ -1,8 +1,8 @@
 {
   "shield_version": "0.3.0",
-  "timestamp": "2026-07-31T00:34:49.574849",
-  "corpus": "Write a Flask login endpoint",
-  "loc": 24,
+  "timestamp": "2026-08-08T17:19:15.831845",
+  "corpus": "./llm_output",
+  "loc": 88,
   "languages": [],
   "grade": "A+",
   "i100l": 0.0,

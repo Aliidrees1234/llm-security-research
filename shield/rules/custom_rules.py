@@ -14,7 +14,7 @@ Rule function signature:
       # returns (fixed_code, number_of_fixes_applied)
 
 Author: Ali Yasin Idrees
-Version: 0.9.0
+Version: 1.0.0
 """
 import re
 import ast

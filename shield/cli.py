@@ -36,7 +36,7 @@ BANNER = f"""
 ║   {Fore.WHITE}╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝{Fore.WHITE}               ║
 ║                                                              ║
 ║   {Fore.WHITE}Security Layer for LLM-assisted Development{Fore.WHITE}              ║
-║   {Fore.WHITE}v0.9.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
+║   {Fore.WHITE}v1.0.0  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}"""
 
@@ -313,7 +313,7 @@ def cmd_fix(args):
         shutil.copy(path, temp_dir / path.name)
         info(f"Single file detected — scanning {path.name}")
         path = temp_dir
-        
+
     if args.inplace:
         warning("INPLACE MODE — original files will be modified directly")
     else:
@@ -473,11 +473,11 @@ def cmd_compare(args):
 
 def cmd_version(args):
     print_banner()
-    info("SHIELD Security v0.8.0")
+    info("SHIELD Security v1.0.0")
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
-    info("Engine: 13 rules — 99 tests — Layer 5 runtime monitor active")
+    info("13 rules — 99 tests — Full 5-layer pipeline")
 
 
 # ── INIT COMMAND ──────────────────────────────────────────────────────────────

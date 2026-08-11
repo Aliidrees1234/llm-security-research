@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="shield-security",
-    version="1.0.0",
+    version="1.0.1",
     author="Ali Yasin Idrees",
     author_email="ali.y.idrees1@gmail.com",
     description="SHIELD — Automated security layer for LLM-assisted web development",

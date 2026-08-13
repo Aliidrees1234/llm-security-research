@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHIELD Security Report</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #F5F5F5;
+            color: #1A1A1A;
+            line-height: 1.6;
+        }
+        .header {
+            background: #0D0D0D;
+            color: white;
+            padding: 32px 48px;
+            border-bottom: 4px solid #444;
+        }
+        .header h1 {
+            font-size: 28px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .header p {
+            color: #999;
+            margin-top: 4px;
+            font-size: 14px;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            padding: 32px 48px;
+            background: white;
+            border-bottom: 1px solid #E0E0E0;
+        }
+        .stat-card {
+            background: #F9F9F9;
+            border: 1px solid #E0E0E0;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+        .grade-card {
+            background: #0D0D0D;
+            color: white;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+        }
+        .grade-number {
+            font-size: 48px;
+            font-weight: bold;
+            color: #B71C1C;
+        }
+        .findings-section {
+            padding: 32px 48px;
+        }
+        .findings-section h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #E0E0E0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .finding {
+            margin-bottom: 16px;
+            border-radius: 6px;
+            padding: 16px 20px;
+        }
+        .finding-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .badge {
+            color: white;
+            padding: 2px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .rule-id {
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .message {
+            font-size: 14px;
+            flex: 1;
+        }
+        .finding-meta {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 8px;
+        }
+        pre {
+            background: #1A1A1A;
+            color: #E0E0E0;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        .recommendation {
+            font-size: 13px;
+            color: #333;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(0,0,0,0.1);
+        }
+        .footer {
+            text-align: center;
+            padding: 24px;
+            color: #999;
+            font-size: 12px;
+            border-top: 1px solid #E0E0E0;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚡ SHIELD Security Report</h1>
+        <p>
+            ./examples &nbsp;·&nbsp;
+            August 13, 2026 at 14:49 &nbsp;·&nbsp;
+            Ali Yasin Idrees
+        </p>
+    </div>
+
+    <div class="summary">
+        <div class="grade-card">
+            <div class="grade-number">D</div>
+            <div class="stat-label" style="color:#999;">Security Grade</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" style="color:#B71C1C;">0</div>
+            <div class="stat-label">High Severity</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" style="color:#E65100;">1</div>
+            <div class="stat-label">Medium Severity</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" style="color:#F57F17;">2</div>
+            <div class="stat-label">Low Severity</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">51</div>
+            <div class="stat-label">Lines of Code</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">5.88</div>
+            <div class="stat-label">I/100L Score</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">3</div>
+            <div class="stat-label">Total Findings</div>
+        </div>
+    </div>
+
+    <div class="findings-section">
+        <h2>Findings (3)</h2>
+        
+    <div class="finding" style="border-left: 4px solid #E65100; background: #FFF3E0;">
+        <div class="finding-header">
+            <span class="badge" style="background:#E65100;">MEDIUM</span>
+            <span class="rule-id">[B608]</span>
+            <span class="message">Possible SQL injection vector through string-based query construction.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 fixed_examples\working_copy\vulnerable_flask.py</span>
+            <span>📍 Line 27</span>
+            <span>🔗 CWE-89</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>26     conn = get_db()
+27     user = conn.execute(f"SELECT * FROM users WHERE username = '{username}'").fetchone()
+28     conn.close()</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Review and fix manually.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B404]</span>
+            <span class="message">Consider possible security implications associated with the subprocess module.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 fixed_examples\working_copy\vulnerable_flask.py</span>
+            <span>📍 Line 11</span>
+            <span>🔗 CWE-78</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>10 import hashlib
+11 import subprocess
+12 from flask import Flask, request, jsonify, session</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Review subprocess usage — ensure commands are hardcoded, not derived from user input.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B603]</span>
+            <span class="message">subprocess call - check for execution of untrusted input.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 fixed_examples\working_copy\vulnerable_flask.py</span>
+            <span>📍 Line 43</span>
+            <span>🔗 CWE-78</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>42     cmd = request.args.get('cmd', 'ls')
+43     result = subprocess.check_output(cmd, shell=False)
+44     return jsonify({'output': result.decode()})</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Ensure subprocess input is hardcoded or whitelisted, never passed from user-controlled data.
+        </div>
+    </div>
+    
+    </div>
+
+    <div class="footer">
+        Generated by SHIELD Security v0.3.0 &nbsp;·&nbsp;
+        Ali Yasin Idrees &nbsp;·&nbsp;
+        github.com/Aliidrees1234/llm-security-research
+    </div>
+</body>
+</html>

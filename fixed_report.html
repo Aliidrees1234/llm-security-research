@@ -64,7 +64,7 @@
         .grade-number {
             font-size: 48px;
             font-weight: bold;
-            color: #1B5E20;
+            color: #B71C1C;
         }
         .findings-section {
             padding: 32px 48px;
@@ -142,15 +142,15 @@
     <div class="header">
         <h1>⚡ SHIELD Security Report</h1>
         <p>
-            ./llm_output &nbsp;·&nbsp;
-            August 08, 2026 at 17:19 &nbsp;·&nbsp;
+            ./examples &nbsp;·&nbsp;
+            August 13, 2026 at 14:49 &nbsp;·&nbsp;
             Ali Yasin Idrees
         </p>
     </div>
 
     <div class="summary">
         <div class="grade-card">
-            <div class="grade-number">A+</div>
+            <div class="grade-number">D</div>
             <div class="stat-label" style="color:#999;">Security Grade</div>
         </div>
         <div class="stat-card">
@@ -158,35 +158,90 @@
             <div class="stat-label">High Severity</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number" style="color:#E65100;">0</div>
+            <div class="stat-number" style="color:#E65100;">1</div>
             <div class="stat-label">Medium Severity</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number" style="color:#F57F17;">0</div>
+            <div class="stat-number" style="color:#F57F17;">2</div>
             <div class="stat-label">Low Severity</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number">88</div>
+            <div class="stat-number">51</div>
             <div class="stat-label">Lines of Code</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number">0.0</div>
+            <div class="stat-number">5.88</div>
             <div class="stat-label">I/100L Score</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number">0</div>
+            <div class="stat-number">3</div>
             <div class="stat-label">Total Findings</div>
         </div>
     </div>
 
     <div class="findings-section">
-        <h2>Findings (0)</h2>
+        <h2>Findings (3)</h2>
         
-        <div style="text-align:center; padding:60px; color:#2E7D32;">
-            <h2>✅ Zero Findings</h2>
-            <p>No security issues detected in this scan.</p>
+    <div class="finding" style="border-left: 4px solid #E65100; background: #FFF3E0;">
+        <div class="finding-header">
+            <span class="badge" style="background:#E65100;">MEDIUM</span>
+            <span class="rule-id">[B608]</span>
+            <span class="message">Possible SQL injection vector through string-based query construction.</span>
         </div>
-        
+        <div class="finding-meta">
+            <span>📄 fixed_examples\working_copy\vulnerable_flask.py</span>
+            <span>📍 Line 27</span>
+            <span>🔗 CWE-89</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>26     conn = get_db()
+27     user = conn.execute(f"SELECT * FROM users WHERE username = '{username}'").fetchone()
+28     conn.close()</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Review and fix manually.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B404]</span>
+            <span class="message">Consider possible security implications associated with the subprocess module.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 fixed_examples\working_copy\vulnerable_flask.py</span>
+            <span>📍 Line 11</span>
+            <span>🔗 CWE-78</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>10 import hashlib
+11 import subprocess
+12 from flask import Flask, request, jsonify, session</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Review subprocess usage — ensure commands are hardcoded, not derived from user input.
+        </div>
+    </div>
+    
+    <div class="finding" style="border-left: 4px solid #F57F17; background: #FFFDE7;">
+        <div class="finding-header">
+            <span class="badge" style="background:#F57F17;">LOW</span>
+            <span class="rule-id">[B603]</span>
+            <span class="message">subprocess call - check for execution of untrusted input.</span>
+        </div>
+        <div class="finding-meta">
+            <span>📄 fixed_examples\working_copy\vulnerable_flask.py</span>
+            <span>📍 Line 43</span>
+            <span>🔗 CWE-78</span>
+            <span>🔧 BANDIT</span>
+        </div>
+        <pre>42     cmd = request.args.get('cmd', 'ls')
+43     result = subprocess.check_output(cmd, shell=False)
+44     return jsonify({'output': result.decode()})</pre>
+        <div class="recommendation">
+            💡 <strong>Recommendation:</strong> Ensure subprocess input is hardcoded or whitelisted, never passed from user-controlled data.
+        </div>
+    </div>
+    
     </div>
 
     <div class="footer">

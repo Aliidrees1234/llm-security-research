@@ -18,7 +18,7 @@ Version: 1.0.1
 """
 import re
 import ast
-import astor
+
 
 # ── FALLBACK MANAGER ──────────────────────────────────────────────────────────
 
@@ -256,7 +256,7 @@ def fix_B201_debug_true(code: str) -> tuple[str, int]:
         new_tree = fixer.visit(tree)
 
         if fixer.fixes > 0:
-            fixed_code = astor.to_source(new_tree)
+            fixed_code = ast.unparse(new_tree)
 
             # Add os import if needed
             if "os.environ" in fixed_code and "import os" not in fixed_code:
@@ -341,7 +341,7 @@ def fix_B602_shell_true(code: str) -> tuple[str, int]:
         new_tree = fixer.visit(tree)
 
         if fixer.fixes > 0:
-            fixed_code = astor.to_source(new_tree)
+            fixed_code = ast.unparse(new_tree)
 
             # Inject whitelist guidance if not already present
             if ('ALLOWED_COMMANDS' not in fixed_code and
@@ -504,7 +504,7 @@ def fix_B105_B106_hardcoded(code: str) -> tuple[str, int]:
         ast.fix_missing_locations(new_tree)
 
         if fixer.fixes > 0:
-            fixed_code = astor.to_source(new_tree)
+            fixed_code = ast.unparse(new_tree)
 
             # Add os import if needed and not already present
             if fixer.needs_os_import and 'import os' not in fixed_code:
@@ -540,12 +540,9 @@ def fix_B105_B106_hardcoded(code: str) -> tuple[str, int]:
 class _WeakHashFixer(ast.NodeTransformer):
     """
     Walks AST looking for hashlib.md5() or hashlib.sha1() calls.
-    Replaces with hashlib.sha256(..., usedforsecurity=False).
-
-    Catches:
-      hashlib.md5(data)
-      hashlib.sha1(data)
-      hashlib.md5(data.encode())
+    Replaces with hashlib.sha256() preserving existing args.
+    usedforsecurity=False added via regex after AST reconstruction
+    to avoid astor keyword argument ordering issues.
     """
     WEAK_HASHES = {'md5', 'sha1'}
 
@@ -553,21 +550,12 @@ class _WeakHashFixer(ast.NodeTransformer):
         self.fixes = 0
 
     def visit_Call(self, node):
-        # Is this a method call on hashlib?
         if isinstance(node.func, ast.Attribute):
             if node.func.attr in self.WEAK_HASHES:
-                # Is the object named hashlib?
                 if (isinstance(node.func.value, ast.Name) and
                         node.func.value.id == 'hashlib'):
-                    # Replace the method name with sha256
+                    # Just rename the method — don't touch arguments
                     node.func.attr = 'sha256'
-                    # Add usedforsecurity=False keyword argument
-                    node.keywords.append(
-                        ast.keyword(
-                            arg='usedforsecurity',
-                            value=ast.Constant(value=False)
-                        )
-                    )
                     self.fixes += 1
         return self.generic_visit(node)
 
@@ -575,16 +563,12 @@ def fix_B324_weak_hash(code: str) -> tuple[str, int]:
     """
     B324 — hashlib_new_insecure_functions
     Severity: HIGH | CWE-327
-    Replace MD5/SHA1 with SHA256 (usedforsecurity=False).
-
-    Strategy:
-      1. Try AST fix — finds hashlib calls by structure
-      2. If AST fails — fall back to regex
+    Replace MD5/SHA1 with SHA256.
+    Strategy: AST renames the method, regex adds usedforsecurity=False.
     """
     if not code.strip():
         return code, 0
 
-    # ── AST approach (primary) ─────────────────────────────────────────────
     try:
         tree = ast.parse(code)
         fixer = _WeakHashFixer()
@@ -592,12 +576,29 @@ def fix_B324_weak_hash(code: str) -> tuple[str, int]:
         ast.fix_missing_locations(new_tree)
 
         if fixer.fixes > 0:
-            fixed_code = astor.to_source(new_tree)
+            fixed_code = ast.unparse(new_tree)
+            # Add usedforsecurity=False only to hashlib.sha256() — not to nested calls
+            # Find the outermost closing paren of sha256()
+            def add_usedforsecurity(m):
+                inner = m.group(1)
+                if 'usedforsecurity' not in inner:
+                    return f'hashlib.sha256({inner}, usedforsecurity=False)'
+                return m.group(0)
+
+            fixed_code = re.sub(
+                r'hashlib\.sha256\((.+?)\)(?!\))',
+                add_usedforsecurity,
+                fixed_code
+            )
+            # Avoid double-adding
+            fixed_code = fixed_code.replace(
+                ', usedforsecurity=False, usedforsecurity=False',
+                ', usedforsecurity=False'
+            )
             return fixed_code, fixer.fixes
 
         return code, 0
 
-    # ── Regex fallback ─────────────────────────────────────────────────────
     except SyntaxError:
         original = code
         fixes = 0
@@ -616,23 +617,17 @@ def fix_B324_weak_hash(code: str) -> tuple[str, int]:
             )
             fixes += 1
         return code, fixes
-
+    
 class _BindAllFixer(ast.NodeTransformer):
     """
     Walks AST looking for host='0.0.0.0' in any function call.
     Replaces with host=os.environ.get('HOST', '127.0.0.1').
-
-    Catches:
-      app.run(host='0.0.0.0')
-      app.run(debug=False, host='0.0.0.0', port=5000)
-      socketio.run(app, host='0.0.0.0')
     """
     def __init__(self):
         self.fixes = 0
         self.needs_os_import = False
 
     def _make_environ_call(self) -> ast.Call:
-        """Build: os.environ.get('HOST', '127.0.0.1')"""
         return ast.Call(
             func=ast.Attribute(
                 value=ast.Attribute(
@@ -654,12 +649,13 @@ class _BindAllFixer(ast.NodeTransformer):
         for keyword in node.keywords:
             if keyword.arg == 'host':
                 if (isinstance(keyword.value, ast.Constant) and
-                        keyword.value.value == '0.0.0.0'):  # nosec B104 — checking for pattern, not binding
+                        keyword.value.value == '0.0.0.0'):  # nosec B104
                     keyword.value = self._make_environ_call()
                     self.fixes += 1
                     self.needs_os_import = True
         return self.generic_visit(node)
 
+    
 def fix_B104_bind_all(code: str) -> tuple[str, int]:
     """
     B104 — hardcoded_bind_all_interfaces
@@ -681,7 +677,7 @@ def fix_B104_bind_all(code: str) -> tuple[str, int]:
         ast.fix_missing_locations(new_tree)
 
         if fixer.fixes > 0:
-            fixed_code = astor.to_source(new_tree)
+            fixed_code = ast.unparse(new_tree)
             if fixer.needs_os_import and 'import os' not in fixed_code:
                 fixed_code = "import os\n" + fixed_code
             return fixed_code, fixer.fixes
@@ -773,7 +769,7 @@ def fix_B108_tmp_dir(code: str) -> tuple[str, int]:
         ast.fix_missing_locations(new_tree)
 
         if fixer.fixes > 0:
-            fixed_code = astor.to_source(new_tree)
+            fixed_code = ast.unparse(new_tree)
             if fixer.needs_os_import and 'import os' not in fixed_code:
                 fixed_code = "import os\n" + fixed_code
             return fixed_code, fixer.fixes
@@ -907,7 +903,7 @@ def fix_B311_random(code: str) -> tuple[str, int]:
         ast.fix_missing_locations(new_tree)
 
         if fixer.fixes > 0:
-            fixed_code = astor.to_source(new_tree)
+            fixed_code = ast.unparse(new_tree)
             if fixer.needs_secrets_import and 'import secrets' not in fixed_code:
                 fixed_code = "import secrets\n" + fixed_code
             return fixed_code, fixer.fixes
@@ -1038,7 +1034,7 @@ def fix_werkzeug_weak_hash(code: str) -> tuple[str, int]:
         ast.fix_missing_locations(new_tree)
 
         if fixer.fixes > 0:
-            fixed_code = astor.to_source(new_tree)
+            fixed_code = ast.unparse(new_tree)
             if 'import bcrypt' not in fixed_code:
                 fixed_code = "import bcrypt\n" + fixed_code
             return fixed_code, fixer.fixes

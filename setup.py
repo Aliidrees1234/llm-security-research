@@ -14,7 +14,7 @@ setup(
         "bandit>=1.9.4",
         "bcrypt>=4.0.0",
         "colorama>=0.4.6",
-        "astor>=0.8.1",
+        
     ],
     extras_require={
         "dev": [

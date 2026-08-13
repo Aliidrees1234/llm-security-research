@@ -13,7 +13,7 @@ k = 3
 output = shield_results
 
 # Exclude these folders from scanning
-exclude = venv,.venv,node_modules,.git,__pycache__,tests
+exclude = venv,.venv,node_modules,.git,__pycache__,tests,fixed
 
 # Fix files in place (WARNING: modifies originals)
 inplace = false

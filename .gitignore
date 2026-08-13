@@ -31,3 +31,11 @@ Thumbs.db
 
 # PyPI credentials
 .pypirc
+
+# Generated output folders
+fixed*/
+shield_results/
+shield_secure_output/
+llm_output/
+*.html
+!examples/*.html

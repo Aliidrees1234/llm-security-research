@@ -4,5 +4,4 @@ colorama>=0.4.6
 pathlib>=1.0.1
 argparse>=1.4.0
 pytest>=7.0.0
-astor>=0.8.1
 pyperclip>=1.8.0

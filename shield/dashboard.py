@@ -370,7 +370,7 @@ def build_dashboard_html(reports: list[dict]) -> str:
     <span class="bolt">⚡</span>
     <div>
         <h1>SHIELD Security Dashboard</h1>
-        <p>Ali Yasin Idrees · v1.0.1 · {datetime.now().strftime('%B %d, %Y %H:%M')}</p>
+        <p>Ali Yasin Idrees · v1.0.2 · {datetime.now().strftime('%B %d, %Y %H:%M')}</p>
     </div>
     <button class="refresh" onclick="location.reload()">↻ Refresh</button>
 </div>

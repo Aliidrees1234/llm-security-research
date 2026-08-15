@@ -731,6 +731,23 @@ def cmd_secure(args):
     success("Pipeline ready — paste and generate")
 
 
+def cmd_dashboard(args):
+    """shield dashboard"""
+    from shield.dashboard import start_dashboard
+
+    if sys.stdout.isatty():
+        print_banner()
+
+    section("SHIELD LOCAL DASHBOARD")
+    info(f"Starting dashboard on port {args.port}")
+    info("Scanning for JSON reports in current directory...")
+    print()
+
+    start_dashboard(
+        port=args.port,
+        open_browser=not args.no_browser
+    )
+
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -869,6 +886,25 @@ Examples:
         default=False,
         help="Open Gemini in browser"
     )
+
+    # ── dashboard ─────────────────────────────────────────────────────────────
+    dashboard_parser = subparsers.add_parser(
+        "dashboard",
+        help="Open local security dashboard in browser"
+    )
+    dashboard_parser.add_argument(
+        "--port",
+        type=int,
+        default=5555,
+        help="Port to run dashboard on (default: 5555)"
+    )
+    dashboard_parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        default=False,
+        dest="no_browser",
+        help="Start server without opening browser"
+    )
     # ── parse and dispatch ─────────────────────────────────────────────────
     args = parser.parse_args()
 
@@ -887,6 +923,10 @@ Examples:
      cmd_monitor(args)
     elif args.command == "secure":
      cmd_secure(args)
+
+    elif args.command == "dashboard":
+     cmd_dashboard(args)
+     
     else:
         print_banner()
         parser.print_help()

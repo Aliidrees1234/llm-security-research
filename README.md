@@ -144,6 +144,8 @@ shield init
 
 # Show version
 shield version
+
+shield audit ./project --company "Acme BV"` | Generate professional client audit report |
 ```
 # Full pipeline — prompt → generate → scan → fix
 shield secure "Write a Flask login endpoint with SQLite"
@@ -156,6 +158,37 @@ shield monitor --test
 
 # Show WAF rules
 shield monitor --show-rules
+
+# Show shield dashboard
+shield dashboard
+
+## Security Auditing
+
+SHIELD can generate professional audit reports suitable for client engagements.
+
+```bash
+# Basic audit
+shield audit ./my_project --company "Acme BV"
+
+# Full audit with custom auditor name and output file
+shield audit ./my_project \
+  --company "Acme BV" \
+  --auditor "Ali Yasin Idrees" \
+  --output acme_audit_2026.html
+
+# Open the report
+start acme_audit_2026.html
+```
+
+The audit report includes:
+- Executive summary with security grade
+- Overall risk level (Low / Medium / High / Critical)
+- I/100L vulnerability density score
+- All findings with file, line, CWE reference, and remediation advice
+- Remediation priority table
+- Automated fix instructions
+
+Suitable for delivering to clients as a standalone confidential document.
 
 
 ## Run Tests

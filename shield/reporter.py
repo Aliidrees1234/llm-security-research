@@ -670,3 +670,253 @@ def generate_comparison_report(before: ScanResult,
 
     Path(output_path).write_text(html, encoding='utf-8')
     return output_path
+
+def generate_audit_report(result: ScanResult,
+                           company: str = "Client",
+                           auditor: str = "Ali Yasin Idrees",
+                           output_path: str = "shield_audit.html") -> str:
+    """
+    Generate a professional client-ready audit report.
+    Suitable for paid security audit engagements.
+    """
+    from datetime import datetime
+
+    grade_color = result.grade_color
+    date_str    = datetime.now().strftime('%B %d, %Y')
+
+    findings_html = ""
+    for finding in sorted(
+        result.findings,
+        key=lambda f: ["HIGH","MEDIUM","LOW"].index(f.severity)
+        if f.severity in ["HIGH","MEDIUM","LOW"] else 3
+    ):
+        color = _severity_color(finding.severity)
+        bg    = _severity_bg(finding.severity)
+        rec   = RECOMMENDATIONS.get(finding.rule_id, "Review and remediate manually.")
+        code_html = f"<pre>{finding.code.strip()}</pre>" if finding.code else ""
+
+        findings_html += f"""
+        <div class="finding" style="border-left:4px solid {color}; background:{bg}; margin-bottom:16px; padding:16px; border-radius:6px;">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+                <span style="background:{color}; color:white; padding:2px 10px; border-radius:4px; font-size:11px; font-weight:bold;">{finding.severity}</span>
+                <span style="font-weight:bold; font-family:monospace;">[{finding.rule_id}]</span>
+                <span>{finding.message}</span>
+            </div>
+            <div style="font-size:12px; color:#555; margin-bottom:8px;">
+                📄 {finding.filename} &nbsp;·&nbsp; Line {finding.line} &nbsp;·&nbsp; CWE-{finding.cwe}
+            </div>
+            {code_html}
+            <div style="font-size:13px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(0,0,0,0.1);">
+                💡 <strong>Recommendation:</strong> {rec}
+            </div>
+        </div>
+        """
+
+    if not findings_html:
+        findings_html = """
+        <div style="text-align:center; padding:40px; color:#2E7D32;">
+            <h3>✅ No security findings detected</h3>
+        </div>
+        """
+
+    risk_level = {
+        "A+": ("LOW", "#1B5E20"),
+        "A":  ("LOW", "#2E7D32"),
+        "B":  ("MEDIUM", "#F57F17"),
+        "C":  ("HIGH", "#E65100"),
+        "D":  ("HIGH", "#B71C1C"),
+        "F":  ("CRITICAL", "#7B1FA2"),
+    }.get(result.grade, ("UNKNOWN", "#444"))
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Security Audit Report — {company}</title>
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{ font-family: 'Segoe UI', Arial, sans-serif; color: #1A1A1A; background: white; }}
+        .cover {{
+            background: #0D0D0D; color: white;
+            padding: 80px 60px; min-height: 280px;
+            display: flex; flex-direction: column; justify-content: center;
+        }}
+        .cover-label {{ font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: #666; margin-bottom: 16px; }}
+        .cover-title {{ font-size: 36px; font-weight: bold; letter-spacing: 1px; margin-bottom: 8px; }}
+        .cover-company {{ font-size: 24px; color: #F57F17; margin-bottom: 32px; }}
+        .cover-meta {{ font-size: 13px; color: #666; line-height: 2; }}
+        .content {{ padding: 48px 60px; }}
+        .section {{ margin-bottom: 40px; }}
+        .section h2 {{
+            font-size: 14px; text-transform: uppercase; letter-spacing: 2px;
+            color: #444; border-bottom: 2px solid #E0E0E0;
+            padding-bottom: 8px; margin-bottom: 20px;
+        }}
+        .exec-grid {{
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 16px; margin-bottom: 24px;
+        }}
+        .exec-card {{
+            border: 1px solid #E0E0E0; border-radius: 8px;
+            padding: 20px; text-align: center;
+        }}
+        .exec-num {{ font-size: 36px; font-weight: bold; line-height: 1; }}
+        .exec-label {{ font-size: 11px; color: #888; text-transform: uppercase; margin-top: 4px; }}
+        .risk-badge {{
+            display: inline-block;
+            background: {risk_level[1]}; color: white;
+            padding: 8px 24px; border-radius: 4px;
+            font-size: 14px; font-weight: bold;
+            letter-spacing: 2px; text-transform: uppercase;
+        }}
+        .grade-display {{
+            font-size: 72px; font-weight: bold;
+            color: {grade_color}; line-height: 1;
+        }}
+        pre {{
+            background: #1A1A1A; color: #E0E0E0;
+            padding: 12px; border-radius: 4px;
+            font-size: 12px; overflow-x: auto;
+            margin: 8px 0;
+        }}
+        .footer {{
+            background: #F5F5F5; padding: 32px 60px;
+            font-size: 12px; color: #888;
+            border-top: 1px solid #E0E0E0;
+            margin-top: 48px;
+        }}
+        .disclaimer {{
+            background: #FFF3E0; border-left: 4px solid #F57F17;
+            padding: 16px 20px; margin-bottom: 24px;
+            font-size: 13px; color: #555; border-radius: 4px;
+        }}
+    </style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+    <div class="cover-label">⚡ SHIELD Security — Confidential Audit Report</div>
+    <div class="cover-title">Security Audit Report</div>
+    <div class="cover-company">{company}</div>
+    <div class="cover-meta">
+        Date: {date_str}<br>
+        Auditor: {auditor}<br>
+        Tool: SHIELD Security v1.0.2<br>
+        Methodology: Static Application Security Testing (SAST)<br>
+        Tools: Bandit 1.9.4 · Semgrep 1.155.0
+    </div>
+</div>
+
+<div class="content">
+
+    <!-- EXECUTIVE SUMMARY -->
+    <div class="section">
+        <h2>Executive Summary</h2>
+        <div class="disclaimer">
+            This report was generated by SHIELD Security, an automated SAST tool.
+            Findings should be reviewed by a qualified security professional before remediation.
+            This audit covers static code analysis only — dynamic testing is out of scope.
+        </div>
+        <div class="exec-grid">
+            <div class="exec-card">
+                <div class="grade-display">{result.grade}</div>
+                <div class="exec-label">Security Grade</div>
+            </div>
+            <div class="exec-card">
+                <div class="exec-num" style="color:#B71C1C;">{len(result.high)}</div>
+                <div class="exec-label">High Severity</div>
+            </div>
+            <div class="exec-card">
+                <div class="exec-num" style="color:#E65100;">{len(result.medium)}</div>
+                <div class="exec-label">Medium Severity</div>
+            </div>
+            <div class="exec-card">
+                <div class="exec-num" style="color:#F57F17;">{len(result.low)}</div>
+                <div class="exec-label">Low Severity</div>
+            </div>
+        </div>
+        <div style="display:flex; gap:40px; align-items:center; margin-top:16px;">
+            <div>
+                <div style="font-size:13px; color:#888; margin-bottom:4px;">Overall Risk Level</div>
+                <span class="risk-badge">{risk_level[0]}</span>
+            </div>
+            <div>
+                <div style="font-size:13px; color:#888; margin-bottom:4px;">Vulnerability Density</div>
+                <div style="font-size:28px; font-weight:bold;">{result.i100l} I/100L</div>
+                <div style="font-size:11px; color:#888;">Issues per 100 lines of code</div>
+            </div>
+            <div>
+                <div style="font-size:13px; color:#888; margin-bottom:4px;">Lines of Code Analyzed</div>
+                <div style="font-size:28px; font-weight:bold;">{result.loc}</div>
+            </div>
+            <div>
+                <div style="font-size:13px; color:#888; margin-bottom:4px;">Total Findings</div>
+                <div style="font-size:28px; font-weight:bold;">{len(result.findings)}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FINDINGS -->
+    <div class="section">
+        <h2>Security Findings ({len(result.findings)})</h2>
+        {findings_html}
+    </div>
+
+    <!-- RECOMMENDATIONS SUMMARY -->
+    <div class="section">
+        <h2>Remediation Priority</h2>
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <tr style="background:#F5F5F5;">
+                <th style="padding:10px; text-align:left; border:1px solid #E0E0E0;">Priority</th>
+                <th style="padding:10px; text-align:left; border:1px solid #E0E0E0;">Action</th>
+                <th style="padding:10px; text-align:left; border:1px solid #E0E0E0;">Effort</th>
+            </tr>
+            <tr>
+                <td style="padding:10px; border:1px solid #E0E0E0; color:#B71C1C; font-weight:bold;">IMMEDIATE</td>
+                <td style="padding:10px; border:1px solid #E0E0E0;">Fix all {len(result.high)} High-severity findings before deployment</td>
+                <td style="padding:10px; border:1px solid #E0E0E0;">Run: shield fix ./{Path(result.corpus_path).name}</td>
+            </tr>
+            <tr>
+                <td style="padding:10px; border:1px solid #E0E0E0; color:#E65100; font-weight:bold;">SHORT TERM</td>
+                <td style="padding:10px; border:1px solid #E0E0E0;">Review {len(result.medium)} Medium-severity findings</td>
+                <td style="padding:10px; border:1px solid #E0E0E0;">Manual review recommended</td>
+            </tr>
+            <tr>
+                <td style="padding:10px; border:1px solid #E0E0E0; color:#F57F17; font-weight:bold;">LONG TERM</td>
+                <td style="padding:10px; border:1px solid #E0E0E0;">Address {len(result.low)} Low-severity best practice violations</td>
+                <td style="padding:10px; border:1px solid #E0E0E0;">Integrate SHIELD into CI/CD pipeline</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- AUTO-REMEDIATION NOTE -->
+    <div class="section">
+        <h2>Automated Remediation Available</h2>
+        <p style="font-size:13px; color:#555; margin-bottom:12px;">
+            SHIELD can automatically fix High and Medium findings using AST-based remediation.
+            Run the following command to apply fixes:
+        </p>
+        <pre>pip install shield-security
+shield fix ./{Path(result.corpus_path).name} --output ./fixed --report fixed_report.html</pre>
+        <p style="font-size:12px; color:#888; margin-top:8px;">
+            Cost Per Mitigated Finding (CPMF): $0.00 — fully local, zero API calls.
+        </p>
+    </div>
+
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+    <strong>SHIELD Security Audit Report</strong> — {company} — {date_str}<br>
+    Auditor: {auditor} · Tool: SHIELD Security v1.0.2<br>
+    pypi.org/project/shield-security · github.com/Aliidrees1234/llm-security-research<br><br>
+    <em>This report is confidential and intended solely for {company}.
+    Unauthorized distribution is prohibited.</em>
+</div>
+
+</body>
+</html>"""
+
+    Path(output_path).write_text(html, encoding='utf-8')
+    return output_path

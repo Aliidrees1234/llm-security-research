@@ -9,7 +9,7 @@ Usage:
   shield dashboard --port 8080
 
 Author: Ali Yasin Idrees
-Version: 1.0.0
+Version: 1.0.2
 """
 
 import json

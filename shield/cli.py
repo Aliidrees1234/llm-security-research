@@ -5,7 +5,7 @@ Secure Hybrid Integration and Enforcement Layer
 for LLM-assisted Development
 
 Author: Ali Yasin Idrees
-Version: 0.8.0
+Version: 1.0.2
 
 Commands:
   shield scan <path>              Scan for vulnerabilities
@@ -748,6 +748,65 @@ def cmd_dashboard(args):
         open_browser=not args.no_browser
     )
 
+
+def cmd_audit(args):
+    """shield audit <path> --company 'Acme BV' --output audit.html"""
+    import subprocess  # nosec B404
+    import json as jsonlib
+    from shield.reporter import parse_bandit_to_result, ScanResult
+
+    if sys.stdout.isatty():
+        print_banner()
+
+    section(f"SHIELD SECURITY AUDIT")
+    info(f"Client:   {args.company}")
+    info(f"Auditor:  {args.auditor}")
+    info(f"Target:   {args.path}")
+    print()
+
+    path = Path(args.path)
+    if not path.exists():
+        error(f"Path not found: {args.path}")
+        sys.exit(1)
+
+    # ── Step 1: Scan ───────────────────────────────────────────────────────
+    section("SCANNING TARGET")
+    t0 = __import__('time').time()
+
+    loc = sum(
+        len(f.read_text(encoding='utf-8', errors='ignore').splitlines())
+        for f in path.rglob('*.py')
+    )
+
+    cmd = [sys.executable, '-m', 'bandit', '-r', str(path), '-f', 'json', '-q']
+    res = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603
+    elapsed = round(__import__('time').time() - t0, 2)
+    info(f"Scan completed in {elapsed}s")
+
+    output    = res.stdout or res.stderr
+    json_start = output.find('{')
+
+    if json_start < 0:
+        result = ScanResult(str(path), loc=loc)
+    else:
+        data   = jsonlib.loads(output[json_start:])
+        result = parse_bandit_to_result(data, str(path), loc)
+
+    info(f"High: {len(result.high)}  Medium: {len(result.medium)}  Low: {len(result.low)}")
+    info(f"Grade: {result.grade}  I/100L: {result.i100l}")
+
+    # ── Step 2: Generate audit report ──────────────────────────────────────
+    section("GENERATING AUDIT REPORT")
+    from shield.reporter import generate_audit_report
+    report_path = generate_audit_report(
+        result=result,
+        company=args.company,
+        auditor=args.auditor,
+        output_path=args.output
+    )
+    success(f"Audit report saved: {report_path}")
+    info(f"Open with: start {report_path}")
+
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -905,6 +964,19 @@ Examples:
         dest="no_browser",
         help="Start server without opening browser"
     )
+
+
+    # ── audit ─────────────────────────────────────────────────────────────────
+    audit_parser = subparsers.add_parser(
+        "audit",
+        help="Generate professional security audit report for a client"
+    )
+    audit_parser.add_argument("path", help="Project directory to audit")
+    audit_parser.add_argument("--company", default="Client", help="Client company name")
+    audit_parser.add_argument("--auditor", default="Ali Yasin Idrees", help="Auditor name")
+    audit_parser.add_argument("--output", default="shield_audit.html", help="Output HTML file")
+    audit_parser.add_argument("--k", type=int, default=3, help="FDSP iterations")
+
     # ── parse and dispatch ─────────────────────────────────────────────────
     args = parser.parse_args()
 
@@ -926,6 +998,9 @@ Examples:
 
     elif args.command == "dashboard":
      cmd_dashboard(args)
+
+    elif args.command == "audit":
+     cmd_audit(args)
      
     else:
         print_banner()

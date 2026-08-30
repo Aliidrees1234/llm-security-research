@@ -5,7 +5,7 @@ Secure Hybrid Integration and Enforcement Layer
 for LLM-assisted Development
 
 Author: Ali Yasin Idrees
-Version: 1.0.2
+Version: 1.0.3
 
 Commands:
   shield scan <path>              Scan for vulnerabilities
@@ -36,7 +36,7 @@ BANNER = f"""
 ║   {Fore.WHITE}╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝{Fore.WHITE}               ║
 ║                                                              ║
 ║   {Fore.WHITE}Security Layer for LLM-assisted Development{Fore.WHITE}              ║
-║   {Fore.WHITE}v1.0.2  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
+║   {Fore.WHITE}v1.0.3  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}"""
 
@@ -60,6 +60,7 @@ def detect_languages(path: str) -> list[str]:
         '.py':   'python',
         '.js':   'javascript',
         '.ts':   'typescript',
+        '.cs':   'csharp',
         '.java': 'java',
         '.php':  'php',
         '.go':   'go',
@@ -110,12 +111,13 @@ def cmd_scan(args):
 
     info(f"Languages detected: {', '.join(languages)}")
 
-    # Count lines of code
+    # Count LOC for all supported languages
+    extensions = ['.py', '.cs', '.java', '.js', '.ts', '.php', '.go', '.rb']
     loc = sum(
         len(f.read_text(encoding='utf-8', errors='ignore').splitlines())
-        for f in path.rglob('*.py')
+        for ext in extensions
+        for f in path.rglob(f'*{ext}')
     )
-
     # Create scan result
     result = ScanResult(str(args.path), loc=loc)
     result.languages = languages
@@ -188,38 +190,68 @@ def cmd_scan(args):
             info(f"Python total — High: {len(high)}  "
                  f"Medium: {len(medium)}  Low: {len(low)}")
 
-    # ── JavaScript scan via Semgrep ────────────────────────────────────────
-    if 'javascript' in languages or 'typescript' in languages:
-        section("JavaScript / TypeScript — Semgrep p/nodejs")
-        t0 = time.time()
+   # ── Semgrep multi-language scan ────────────────────────────────────────────
+    SEMGREP_RULESETS = {
+        'javascript': 'p/nodejs',
+        'typescript': 'p/typescript',
+        'csharp':     'p/csharp',
+        'java':       'p/java',
+        'php':        'p/php',
+        'go':         'p/golang',
+        'ruby':       'p/ruby',
+    }
+
+    for lang in languages:
+        if lang == 'python':
+            continue  # Python handled by Bandit above
+        if lang not in SEMGREP_RULESETS:
+            continue
+
+        ruleset = SEMGREP_RULESETS[lang]
+        section(f"{lang.upper()} — Semgrep {ruleset}")
+        t0 = __import__('time').time()
+
         try:
-            cmd = ['semgrep', '--config=p/nodejs', '--json', str(path)]
+            cmd = ['semgrep', f'--config={ruleset}', '--json', str(path)]
             res = subprocess.run(  # nosec B603
-                cmd, capture_output=True, text=True, timeout=60,
-                encoding='utf-8', errors='replace'
+                cmd, capture_output=True, text=True,
+                timeout=120, encoding='utf-8', errors='replace'
             )
-            elapsed = round(time.time() - t0, 2)
+            elapsed = round(__import__('time').time() - t0, 2)
             info(f"Scan completed in {elapsed}s")
-            output = res.stdout
+
+            output    = res.stdout
             json_start = output.find('{')
 
             if json_start >= 0:
-                data = jsonlib.loads(output[json_start:])
-                result = parse_semgrep_to_result(data, result)
-                findings = [f for f in result.findings if f.source == 'semgrep']
-                total_high += len(findings)
+                data     = jsonlib.loads(output[json_start:])
+                findings = data.get('results', [])
+                blocking = [
+                    f for f in findings
+                    if f.get('extra', {}).get('severity', '').upper()
+                    in ('ERROR', 'WARNING', 'BLOCKING')
+                ]
 
-                if findings:
-                    for f in findings:
-                        error(f"[SEMGREP] {f.rule_id}")
-                        info(f"    File: {f.filename} — Line {f.line}")
-                else:
-                    success("No findings in JavaScript/TypeScript files")
+                total_high += len(blocking)
 
-                info(f"JS/TS total — Blocking: {len(findings)}")
+            # Add semgrep findings to result object for correct grade calculation
+            for f in blocking:
+                from shield.reporter import Finding
+                result.add_finding(Finding(
+                    rule_id  = f.get('check_id', '').split('.')[-1],
+                    severity = 'HIGH',
+                    cwe      = 'N/A',
+                    message  = f.get('extra', {}).get('message', '')[:100],
+                    filename = f.get('path', ''),
+                    line     = f.get('start', {}).get('line', 0),
+                    code     = f.get('extra', {}).get('lines', ''),
+                    source   = 'semgrep'
+                ))
 
         except FileNotFoundError:
-            warning("Semgrep not installed — skipping JS/TS scan")
+            warning("Semgrep not installed — skipping")
+        except Exception as e:
+            warning(f"{lang.upper()} scan failed: {e}")
 
     # ── Final verdict ──────────────────────────────────────────────────────
     section("SHIELD SCAN RESULT")
@@ -473,7 +505,7 @@ def cmd_compare(args):
 
 def cmd_version(args):
     print_banner()
-    info("SHIELD Security v1.0.2")
+    info("SHIELD Security v1.0.3")
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
@@ -769,44 +801,101 @@ def cmd_audit(args):
         error(f"Path not found: {args.path}")
         sys.exit(1)
 
-    # ── Step 1: Scan ───────────────────────────────────────────────────────
+    # ── Step 1: Scan ───────────────────────────────────────────────────────────
     section("SCANNING TARGET")
     t0 = __import__('time').time()
 
+    languages = detect_languages(str(path))
+    info(f"Languages detected: {', '.join(languages)}")
+
+    # Count LOC for all languages
+    extensions = ['.py', '.cs', '.java', '.js', '.ts', '.php', '.go', '.rb']
     loc = sum(
         len(f.read_text(encoding='utf-8', errors='ignore').splitlines())
-        for f in path.rglob('*.py')
+        for ext in extensions
+        for f in path.rglob(f'*{ext}')
     )
 
-    cmd = [sys.executable, '-m', 'bandit', '-r', str(path), '-f', 'json', '-q']
-    res = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603
+    result = ScanResult(str(path), loc=loc)
+    result.languages = languages
+
+    # ── Python — Bandit ────────────────────────────────────────────────────────
+    if 'python' in languages:
+        cmd = [sys.executable, '-m', 'bandit', '-r', str(path), '-f', 'json', '-q']
+        res = subprocess.run(cmd, capture_output=True, text=True)  # nosec B603
+        output     = res.stdout or res.stderr
+        json_start = output.find('{')
+        if json_start >= 0:
+            data   = jsonlib.loads(output[json_start:])
+            result = parse_bandit_to_result(data, str(path), loc)
+            result.languages = languages
+
+    # ── Other languages — Semgrep ──────────────────────────────────────────────
+    SEMGREP_RULESETS = {
+        'javascript': 'p/nodejs',
+        'typescript': 'p/typescript',
+        'csharp':     'p/csharp',
+        'java':       'p/java',
+        'php':        'p/php',
+        'go':         'p/golang',
+        'ruby':       'p/ruby',
+    }
+
+    for lang in languages:
+        if lang == 'python':
+            continue
+        if lang not in SEMGREP_RULESETS:
+            continue
+        ruleset = SEMGREP_RULESETS[lang]
+        info(f"Scanning {lang.upper()} with Semgrep {ruleset}...")
+        try:
+            cmd = ['semgrep', f'--config={ruleset}', '--json', str(path)]
+            res = subprocess.run(  # nosec B603
+                cmd, capture_output=True, text=True,
+                timeout=120, encoding='utf-8', errors='replace'
+            )
+            output     = res.stdout
+            json_start = output.find('{')
+            if json_start >= 0:
+                data     = jsonlib.loads(output[json_start:])
+                findings = data.get('results', [])
+                for f in findings:
+                    from shield.reporter import Finding
+                    result.add_finding(Finding(
+                        rule_id  = f.get('check_id', '').split('.')[-1],
+                        severity = 'HIGH',
+                        cwe      = 'N/A',
+                        message  = f.get('extra', {}).get('message', '')[:120],
+                        filename = f.get('path', ''),
+                        line     = f.get('start', {}).get('line', 0),
+                        code     = f.get('extra', {}).get('lines', ''),
+                        source   = 'semgrep'
+                    ))
+        except Exception as e:
+            warning(f"{lang.upper()} scan failed: {e}")
+
     elapsed = round(__import__('time').time() - t0, 2)
     info(f"Scan completed in {elapsed}s")
-
-    output    = res.stdout or res.stderr
-    json_start = output.find('{')
-
-    if json_start < 0:
-        result = ScanResult(str(path), loc=loc)
-    else:
-        data   = jsonlib.loads(output[json_start:])
-        result = parse_bandit_to_result(data, str(path), loc)
-
     info(f"High: {len(result.high)}  Medium: {len(result.medium)}  Low: {len(result.low)}")
     info(f"Grade: {result.grade}  I/100L: {result.i100l}")
 
-    # ── Step 2: Generate audit report ──────────────────────────────────────
     section("GENERATING AUDIT REPORT")
-    from shield.reporter import generate_audit_report
-    report_path = generate_audit_report(
-        result=result,
-        company=args.company,
-        auditor=args.auditor,
-        output_path=args.output
-    )
-    success(f"Audit report saved: {report_path}")
-    info(f"Open with: start {report_path}")
-
+    try:
+        from shield.reporter import generate_audit_report
+        report_path = generate_audit_report(
+            result=result,
+            company=args.company,
+            auditor=args.auditor,
+            output_path=args.output
+        )
+        success(f"Audit report saved: {report_path}")
+        info(f"Open with: start {report_path}")
+        print()
+        info("To save as PDF: open in browser → Ctrl+P → Save as PDF → Destination: PDF")
+    except Exception as e:
+        import traceback
+        error(f"Report generation failed: {e}")
+        traceback.print_exc()
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():

@@ -509,7 +509,7 @@ def cmd_version(args):
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
-    info("13 rules — 99 tests — Full 5-layer pipeline")
+    info("13 rules — 99 tests — 8 languages — audit reports")
 
 
 # ── INIT COMMAND ──────────────────────────────────────────────────────────────

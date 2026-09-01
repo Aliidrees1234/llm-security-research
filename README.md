@@ -131,6 +131,7 @@ shield scan ./my_project --report report.html
 shield scan ./my_project --quiet
 
 # Auto-fix vulnerabilities
+shield fix ./project` | Auto-fix Python vulnerabilities (Python only) |
 shield fix ./my_project --output ./fixed --k 3
 
 # Fix with report
@@ -190,6 +191,12 @@ The audit report includes:
 
 Suitable for delivering to clients as a standalone confidential document.
 
+> **Language Support:**
+> - `shield fix` — Python only (AST-based auto-remediation)
+> - `shield scan` — 8 languages (Python, JS, TS, C#, Java, PHP, Go, Ruby)
+> - `shield audit` — 8 languages (professional report for any language)
+>
+> Multi-language auto-fix is planned for a future release.
 
 ## Run Tests
 
@@ -322,34 +329,7 @@ All 20 tasks contained **zero security instructions** — measuring intrinsic mo
 | FDSP Engine | 1.0 | Python (3 without-SHIELD corpora) | 6 April 2026 |
 
 ---
-## Changelog
 
-### v0.5.0
-- `.shieldrc` config file — project-level configuration
-- `shield init` — auto-generates config with project detection
-- `--quiet` flag — hides Low findings for cleaner output
-- Scan timing — shows how long each scan step took
-- MIT License — open for contributions
-- PyPI ready — `pip install shield-security`
-
-### v0.4.0
-- HTML scan reports with security grade
-- JSON export for programmatic use
-- `shield compare` — before/after comparison report
-
-### v0.3.0
-- Full AST engine — all 11 rules converted
-- 89 tests passing
-
-### v0.2.0
-- AST engine for B201, B602, B105
-- Hybrid fallback system
-
-### v0.1.0
-- CLI tool — shield scan, shield fix, shield version
-- 41 tests
-
----
 
 ## Citation
 

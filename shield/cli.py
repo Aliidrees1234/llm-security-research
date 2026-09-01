@@ -336,6 +336,20 @@ def cmd_fix(args):
     if not path.exists():
         error(f"Path not found: {args.path}")
         sys.exit(1)
+    # Check if project contains non-Python files
+    languages = detect_languages(str(path))
+    non_python = [l for l in languages if l != 'python']
+    if non_python and 'python' not in languages:
+        error(f"shield fix supports Python only.")
+        error(f"Detected: {', '.join(non_python)}")
+        info("Use 'shield scan' to detect vulnerabilities in non-Python projects.")
+        info("Use 'shield audit' to generate a professional report.")
+        sys.exit(1)
+    elif non_python:
+        warning(f"Non-Python files detected: {', '.join(non_python)}")
+        warning("Auto-fix will only be applied to Python files.")
+        info("For full coverage use: shield audit ./project")
+        print()
 
     # If single file — wrap in temp folder
     if path.is_file():

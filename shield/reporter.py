@@ -8,7 +8,7 @@ Usage:
   generate_report(findings, output_path="shield_report.html")
 
 Author: Ali Yasin Idrees
-Version: 1.0.3
+Version: 1.0.4
 """
 
 import json
@@ -802,7 +802,7 @@ def generate_audit_report(result: ScanResult,
     <div class="cover-meta">
         Date: {date_str}<br>
         Auditor: {auditor}<br>
-        Tool: SHIELD Security v1.0.3<br>
+        Tool: SHIELD Security v1.0.4<br>
         Methodology: Static Application Security Testing (SAST)<br>
         Tools: Bandit 1.9.4 · Semgrep 1.155.0
     </div>
@@ -909,7 +909,7 @@ shield fix ./{Path(result.corpus_path).name} --output ./fixed --report fixed_rep
 <!-- FOOTER -->
 <div class="footer">
     <strong>SHIELD Security Audit Report</strong> — {company} — {date_str}<br>
-    Auditor: {auditor} · Tool: SHIELD Security v1.0.3<br>
+    Auditor: {auditor} · Tool: SHIELD Security v1.0.4<br>
     pypi.org/project/shield-security · github.com/Aliidrees1234/llm-security-research<br><br>
     <em>This report is confidential and intended solely for {company}.
     Unauthorized distribution is prohibited.</em>

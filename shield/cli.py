@@ -5,7 +5,7 @@ Secure Hybrid Integration and Enforcement Layer
 for LLM-assisted Development
 
 Author: Ali Yasin Idrees
-Version: 1.0.3
+Version: 1.0.4
 
 Commands:
   shield scan <path>              Scan for vulnerabilities
@@ -36,10 +36,60 @@ BANNER = f"""
 ║   {Fore.WHITE}╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝{Fore.WHITE}               ║
 ║                                                              ║
 ║   {Fore.WHITE}Security Layer for LLM-assisted Development{Fore.WHITE}              ║
-║   {Fore.WHITE}v1.0.3  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
+║   {Fore.WHITE}v1.0.4  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}"""
+#--------------------------------------------------------
+def check_for_updates():
+    """Check PyPI for newer version of shield-security."""
+    try:
+        import urllib.request
+        import json as jsonlib
+        url = "https://pypi.org/pypi/shield-security/json"
+        with urllib.request.urlopen(url, timeout=3) as r:  # nosec B310
+            data = jsonlib.loads(r.read())
+            latest = data['info']['version']
+            current = __import__('shield').__version__
+            if latest != current:
+                print(f"\n{Fore.YELLOW}  ⚠️  Update available: v{latest} "
+                      f"(you have v{current}){Style.RESET_ALL}")
+                print(f"{Fore.YELLOW}  →   Run: pip install --upgrade shield-security"
+                      f"{Style.RESET_ALL}\n")
+    except Exception:
+        pass  # nosec B110 — offline or PyPI unreachable, skip silently
 
+
+def run_self_check():
+    """
+    SHIELD scans itself before running.
+    Ensures the tool is clean before auditing others.
+    """
+    try:
+        import subprocess  # nosec B404
+        import json as jsonlib
+        shield_path = str(Path(__file__).parent)
+        cmd = [
+            sys.executable, '-m', 'bandit',
+            '-r', shield_path,
+            '-f', 'json', '-q'
+        ]
+        res = subprocess.run(  # nosec B603
+            cmd, capture_output=True, text=True, timeout=30
+        )
+        output = res.stdout or res.stderr
+        json_start = output.find('{')
+        if json_start >= 0:
+            data  = jsonlib.loads(output[json_start:])
+            high  = [r for r in data.get('results', [])
+                     if r.get('issue_severity') == 'HIGH']
+            if high:
+                print(f"{Fore.RED}  ⚠️  SHIELD SELF-CHECK FAILED — "
+                      f"{len(high)} High finding(s) in tool itself{Style.RESET_ALL}")
+                print(f"{Fore.RED}  →   Please report this at: "
+                      f"github.com/Aliidrees1234/llm-security-research/issues"
+                      f"{Style.RESET_ALL}\n")
+    except Exception:
+        pass  # nosec B110 — self-check is optional, never block the user
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
 def print_banner():
@@ -51,6 +101,13 @@ def warning(msg): print(f"{Fore.YELLOW}  ⚠️   {msg}{Style.RESET_ALL}")
 def error(msg):   print(f"{Fore.RED}  ❌  {msg}{Style.RESET_ALL}")
 def info(msg):    print(f"{Fore.WHITE}  →   {msg}{Style.RESET_ALL}")
 def section(msg): print(f"\n{Fore.WHITE}{'─'*60}\n  {msg}\n{'─'*60}{Style.RESET_ALL}")
+
+def print_banner():
+    if sys.stdout.isatty():
+        print(BANNER)
+        check_for_updates()
+
+
 
 # ── LANGUAGE DETECTION ────────────────────────────────────────────────────────
 
@@ -89,6 +146,8 @@ def cmd_scan(args):
     from shield.config import load_config
     cfg = load_config(str(args.path))
     scan_start = time.time()
+
+    run_self_check()
 
     # Apply config defaults where args not specified
     if not args.report and cfg.get('report'):
@@ -519,7 +578,7 @@ def cmd_compare(args):
 
 def cmd_version(args):
     print_banner()
-    info("SHIELD Security v1.0.3")
+    info("SHIELD Security v1.0.4")
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
@@ -815,6 +874,7 @@ def cmd_audit(args):
         error(f"Path not found: {args.path}")
         sys.exit(1)
 
+    run_self_check()
     # ── Step 1: Scan ───────────────────────────────────────────────────────────
     section("SCANNING TARGET")
     t0 = __import__('time').time()
@@ -910,6 +970,8 @@ def cmd_audit(args):
         import traceback
         error(f"Report generation failed: {e}")
         traceback.print_exc()
+    
+    
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():

@@ -14,7 +14,7 @@ Loads .shieldrc from current directory or home directory.
   grade_fail = D
 
 Author: Ali Yasin Idrees
-Version: 1.0.4
+Version: 1.0.5
 """
 
 from pathlib import Path

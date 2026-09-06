@@ -5,7 +5,7 @@ Secure Hybrid Integration and Enforcement Layer
 for LLM-assisted Development
 
 Author: Ali Yasin Idrees
-Version: 1.0.4
+Version: 1.0.5
 
 Commands:
   shield scan <path>              Scan for vulnerabilities
@@ -36,7 +36,7 @@ BANNER = f"""
 ║   {Fore.WHITE}╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝{Fore.WHITE}               ║
 ║                                                              ║
 ║   {Fore.WHITE}Security Layer for LLM-assisted Development{Fore.WHITE}              ║
-║   {Fore.WHITE}v1.0.4  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
+║   {Fore.WHITE}v1.0.5  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}"""
 #--------------------------------------------------------
@@ -578,7 +578,7 @@ def cmd_compare(args):
 
 def cmd_version(args):
     print_banner()
-    info("SHIELD Security v1.0.4")
+    info("SHIELD Security v1.0.5")
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
@@ -970,7 +970,152 @@ def cmd_audit(args):
         import traceback
         error(f"Report generation failed: {e}")
         traceback.print_exc()
-    
+
+
+def cmd_doctor(args):
+    """shield doctor — check all dependencies"""
+    if sys.stdout.isatty():
+        print_banner()
+
+    section("SHIELD DOCTOR — INSTALLATION CHECK")
+
+    all_good = True
+
+    # ── Python version ─────────────────────────────────────────────────────
+    import platform
+    py_version = platform.python_version()
+    major, minor = int(py_version.split('.')[0]), int(py_version.split('.')[1])
+    if major >= 3 and minor >= 10:
+        success(f"Python {py_version}")
+    else:
+        error(f"Python {py_version} — requires 3.10+")
+        all_good = False
+
+    # ── Bandit ─────────────────────────────────────────────────────────────
+    try:
+        import subprocess  # nosec B404
+        res = subprocess.run(  # nosec B603
+            [sys.executable, '-m', 'bandit', '--version'],
+            capture_output=True, text=True
+        )
+        version = res.stdout.strip().split('\n')[0]
+        success(f"Bandit — {version}")
+    except Exception:
+        error("Bandit — NOT FOUND")
+        info("    Fix: pip install bandit")
+        all_good = False
+
+    # ── Semgrep ────────────────────────────────────────────────────────────
+    try:
+        res = subprocess.run(  # nosec B603
+            ['semgrep', '--version'],
+            capture_output=True, text=True
+        )
+        version = res.stdout.strip()
+        success(f"Semgrep — {version}")
+    except FileNotFoundError:
+        warning("Semgrep — NOT FOUND (JS/TS/C#/Java scanning disabled)")
+        info("    Fix: pip install semgrep")
+
+    # ── pyperclip ──────────────────────────────────────────────────────────
+    try:
+        import pyperclip
+        success("pyperclip — installed (clipboard support enabled)")
+    except ImportError:
+        warning("pyperclip — NOT FOUND (clipboard copy disabled)")
+        info("    Fix: pip install pyperclip")
+
+    # ── bcrypt ─────────────────────────────────────────────────────────────
+    try:
+        import bcrypt
+        success(f"bcrypt — installed")
+    except ImportError:
+        error("bcrypt — NOT FOUND")
+        info("    Fix: pip install bcrypt")
+        all_good = False
+
+    # ── colorama ───────────────────────────────────────────────────────────
+    try:
+        import colorama
+        success("colorama — installed (colored output enabled)")
+    except ImportError:
+        warning("colorama — NOT FOUND (no colored output)")
+        info("    Fix: pip install colorama")
+
+    # ── SHIELD rules ───────────────────────────────────────────────────────
+    try:
+        from shield.rules.custom_rules import REMEDIATION_MAP
+        success(f"SHIELD rules — {len(REMEDIATION_MAP)} rules loaded")
+    except Exception as e:
+        error(f"SHIELD rules — FAILED to load: {e}")
+        all_good = False
+
+    # ── SHIELD reporter ────────────────────────────────────────────────────
+    try:
+        from shield.reporter import generate_report
+        success("SHIELD reporter — HTML/JSON reports ready")
+    except Exception as e:
+        error(f"SHIELD reporter — FAILED: {e}")
+        all_good = False
+
+    # ── SHIELD Layer 2 ─────────────────────────────────────────────────────
+    try:
+        from shield.layer2_grasp import GRASPEngine
+        engine = GRASPEngine()
+        success("SHIELD Layer 2 — GRASP engine ready")
+    except Exception as e:
+        error(f"SHIELD Layer 2 — FAILED: {e}")
+        all_good = False
+
+    # ── SHIELD Layer 5 ─────────────────────────────────────────────────────
+    try:
+        from shield.layer5_runtime import ShieldMiddleware
+        success("SHIELD Layer 5 — runtime monitor ready")
+    except Exception as e:
+        error(f"SHIELD Layer 5 — FAILED: {e}")
+        all_good = False
+
+    # ── Quick scan test ────────────────────────────────────────────────────
+    section("QUICK SCAN TEST")
+    try:
+        import tempfile
+        import subprocess  # nosec B404
+        test_code = "from flask import Flask\napp = Flask(__name__)\napp.run(debug=True)\n"
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.py',
+            delete=False, encoding='utf-8'
+        ) as f:
+            f.write(test_code)
+            tmp = f.name
+
+        res = subprocess.run(  # nosec B603
+            [sys.executable, '-m', 'bandit', tmp, '-f', 'json', '-q'],
+            capture_output=True, text=True
+        )
+        import json as jsonlib
+        output = res.stdout or res.stderr
+        json_start = output.find('{')
+        if json_start >= 0:
+            data    = jsonlib.loads(output[json_start:])
+            results = data.get('results', [])
+            if any(r.get('test_id') == 'B201' for r in results):
+                success("Bandit scan test — B201 detected correctly")
+            else:
+                warning("Bandit scan test — B201 not detected")
+
+        import os
+        os.unlink(tmp)
+    except Exception as e:
+        error(f"Quick scan test failed: {e}")
+        all_good = False
+
+    # ── Final verdict ──────────────────────────────────────────────────────
+    section("RESULT")
+    if all_good:
+        success("SHIELD is fully operational — ready to scan and audit")
+    else:
+        error("Some issues found — fix them before running audits")
+        info("Run: pip install -r requirements.txt")   
     
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
@@ -1142,6 +1287,12 @@ Examples:
     audit_parser.add_argument("--output", default="shield_audit.html", help="Output HTML file")
     audit_parser.add_argument("--k", type=int, default=3, help="FDSP iterations")
 
+    # ── doctor ────────────────────────────────────────────────────────────────
+    subparsers.add_parser(
+        "doctor",
+        help="Check SHIELD installation and dependencies"
+    )
+
     # ── parse and dispatch ─────────────────────────────────────────────────
     args = parser.parse_args()
 
@@ -1166,6 +1317,10 @@ Examples:
 
     elif args.command == "audit":
      cmd_audit(args)
+
+    elif args.command == "doctor":
+     cmd_doctor(args)
+     
      
     else:
         print_banner()

@@ -5,7 +5,7 @@
 
 [![SHIELD Security Gate](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml/badge.svg)](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-blue)
-![Version](https://img.shields.io/badge/SHIELD-v1.0.4-black)
+![Version](https://img.shields.io/badge/SHIELD-v1.0.5-black)
 ![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)
 
 ---
@@ -146,8 +146,9 @@ shield init
 # Show version
 shield version
 
-shield audit ./project --company "Acme BV"` | Generate professional client audit report |
-```
+# Show doctor
+shield doctor` | Check all dependencies and installation health |
+
 # Full pipeline — prompt → generate → scan → fix
 shield secure "Write a Flask login endpoint with SQLite"
 
@@ -164,8 +165,11 @@ shield monitor --show-rules
 shield dashboard
 
 ## Security Auditing
+# Generate Audit
+shield audit ./project --company "Acme BV"` | Generate professional client audit report 
 
 SHIELD can generate professional audit reports suitable for client engagements.
+
 
 ```bash
 # Basic audit

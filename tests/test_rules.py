@@ -12,7 +12,7 @@ Every rule has:
   3. An edge case — confirms it handles unusual input
 
 Author: Ali Yasin Idrees
-Version: 1.0.5
+Version: 1.0.6
 """
 
 import pytest

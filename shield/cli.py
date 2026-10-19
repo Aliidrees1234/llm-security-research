@@ -5,7 +5,7 @@ Secure Hybrid Integration and Enforcement Layer
 for LLM-assisted Development
 
 Author: Ali Yasin Idrees
-Version: 1.0.5
+Version: 1.0.6
 
 Commands:
   shield scan <path>              Scan for vulnerabilities
@@ -19,6 +19,7 @@ import sys
 import argparse
 from pathlib import Path
 from colorama import init, Fore, Style
+
 
 # Initialize colorama for Windows color support
 init(autoreset=True)
@@ -36,7 +37,7 @@ BANNER = f"""
 ║   {Fore.WHITE}╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚═════╝{Fore.WHITE}               ║
 ║                                                              ║
 ║   {Fore.WHITE}Security Layer for LLM-assisted Development{Fore.WHITE}              ║
-║   {Fore.WHITE}v1.0.5  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
+║   {Fore.WHITE}v1.0.6  ·  Ali Yasin Idrees  ·  2026{Fore.WHITE}                    ║
 ╚══════════════════════════════════════════════════════════════╝
 {Style.RESET_ALL}"""
 #--------------------------------------------------------
@@ -128,6 +129,67 @@ def detect_languages(path: str) -> list[str]:
         if f.suffix in extensions:
             found.add(extensions[f.suffix])
     return sorted(list(found))
+
+
+def run_shield_js(command: str, path: Path, output: str | None = None,
+                  inplace: bool = False) -> dict:
+    """Run the Node.js engine and return its JSON result."""
+    import json as jsonlib
+    import os
+    import subprocess  # nosec B404
+
+    configured = os.environ.get('SHIELD_JS_PATH')
+    candidates = []
+    if configured:
+        candidates.append(Path(configured))
+    candidates.extend([
+        Path.cwd() / 'shield-js',
+        Path(__file__).resolve().parents[2] / 'shield-js',
+    ])
+
+    engine = next((candidate for candidate in candidates
+                   if (candidate / 'src' / 'index.js').exists()), None)
+    if engine is None:
+        raise FileNotFoundError(
+            'shield-js engine not found; set SHIELD_JS_PATH to its directory'
+        )
+
+    node = os.environ.get('SHIELD_NODE', 'node')
+    cmd = [node, str(engine / 'src' / 'index.js'), command, str(path)]
+    if inplace:
+        cmd.append('--inplace')
+    elif output:
+        cmd.extend(['--output', output])
+
+    result = subprocess.run(  # nosec B603
+        cmd, capture_output=True, text=True, encoding='utf-8', errors='replace'
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or 'unknown shield-js error'
+        raise RuntimeError(detail)
+
+    try:
+        return jsonlib.loads(result.stdout)
+    except jsonlib.JSONDecodeError as exc:
+        raise RuntimeError(f'invalid shield-js JSON output: {exc}') from exc
+
+
+def add_shield_js_findings(result, node_result, source='shield-js'):
+    """Merge shield-js findings into the shared Python ScanResult."""
+    from shield.reporter import Finding
+
+    for file_result in node_result.get('files', []):
+        for finding in file_result.get('findings', []):
+            result.add_finding(Finding(
+                rule_id=finding.get('ruleId', ''),
+                severity=finding.get('severity', 'LOW').upper(),
+                cwe=finding.get('cwe', 'N/A'),
+                message=finding.get('message', ''),
+                filename=file_result.get('file', ''),
+                line=finding.get('line', 0) or 0,
+                code='',
+                source=source,
+            ))
 
 # ── SCAN COMMAND ──────────────────────────────────────────────────────────────
 
@@ -249,7 +311,33 @@ def cmd_scan(args):
             info(f"Python total — High: {len(high)}  "
                  f"Medium: {len(medium)}  Low: {len(low)}")
 
-   # ── Semgrep multi-language scan ────────────────────────────────────────────
+    # ── JavaScript/TypeScript scan via shield-js ──────────────────────────────
+    js_languages = {'javascript', 'typescript'} & set(languages)
+    if js_languages:
+        section("JavaScript/TypeScript — shield-js")
+        try:
+            node_result = run_shield_js('scan', path)
+            add_shield_js_findings(result, node_result)
+            js_findings = sum(
+                len(file_result.get('findings', []))
+                for file_result in node_result.get('files', [])
+            )
+            total_high += sum(
+                1 for file_result in node_result.get('files', [])
+                for finding in file_result.get('findings', [])
+                if finding.get('severity', '').upper() == 'HIGH'
+                or finding.get('severity', '').upper() == 'CRITICAL'
+            )
+            total_medium += sum(
+                1 for file_result in node_result.get('files', [])
+                for finding in file_result.get('findings', [])
+                if finding.get('severity', '').upper() == 'MEDIUM'
+            )
+            info(f"shield-js findings: {js_findings}")
+        except Exception as e:
+            warning(f"JavaScript/TypeScript scan failed: {e}")
+
+    # ── Semgrep multi-language scan ────────────────────────────────────────────
     SEMGREP_RULESETS = {
         'javascript': 'p/nodejs',
         'typescript': 'p/typescript',
@@ -263,6 +351,8 @@ def cmd_scan(args):
     for lang in languages:
         if lang == 'python':
             continue  # Python handled by Bandit above
+        if lang in js_languages:
+            continue  # JavaScript/TypeScript handled by shield-js above
         if lang not in SEMGREP_RULESETS:
             continue
 
@@ -271,6 +361,7 @@ def cmd_scan(args):
         t0 = __import__('time').time()
 
         try:
+            blocking = []
             cmd = ['semgrep', f'--config={ruleset}', '--json', str(path)]
             res = subprocess.run(  # nosec B603
                 cmd, capture_output=True, text=True,
@@ -311,6 +402,29 @@ def cmd_scan(args):
             warning("Semgrep not installed — skipping")
         except Exception as e:
             warning(f"{lang.upper()} scan failed: {e}")
+
+    # ── JavaScript / TypeScript — shield-js (SJS rules) ────────────────────────
+    from shield import jsbridge
+    if jsbridge.wants_js(languages):
+        section("JavaScript / TypeScript — shield-js")
+        if jsbridge.find_shield_js():
+            try:
+                js = jsbridge.scan_js(str(path))
+                added = jsbridge.merge_findings(result, js['findings'])
+                for f in added:
+                    (error if f.severity == 'HIGH' else warning)(f"[{f.rule_id}] {f.message}")
+                    info(f"    File: {f.filename} — Line {f.line}")
+                for e in js['errors']:
+                    error(f"Could not parse {e['file']}: {e['message']}")
+                total_high   += sum(1 for f in added if f.severity == 'HIGH')
+                total_medium += sum(1 for f in added if f.severity == 'MEDIUM')
+                total_low    += sum(1 for f in added if f.severity == 'LOW')
+                info(f"shield-js total — {len(added)} finding(s) in {js['files']} file(s)")
+            except jsbridge.JsBridgeError as e:
+                warning(f"shield-js failed: {e}")
+        else:
+            warning("shield-js not found — SJS rules skipped (run `npm link` in the shield-js folder)")
+
 
     # ── Final verdict ──────────────────────────────────────────────────────
     section("SHIELD SCAN RESULT")
@@ -395,20 +509,56 @@ def cmd_fix(args):
     if not path.exists():
         error(f"Path not found: {args.path}")
         sys.exit(1)
-    # Check if project contains non-Python files
-    languages = detect_languages(str(path))
-    non_python = [l for l in languages if l != 'python']
-    if non_python and 'python' not in languages:
-        error(f"shield fix supports Python only.")
-        error(f"Detected: {', '.join(non_python)}")
-        info("Use 'shield scan' to detect vulnerabilities in non-Python projects.")
-        info("Use 'shield audit' to generate a professional report.")
-        sys.exit(1)
-    elif non_python:
-        warning(f"Non-Python files detected: {', '.join(non_python)}")
-        warning("Auto-fix will only be applied to Python files.")
-        info("For full coverage use: shield audit ./project")
+    # ── Languages ──────────────────────────────────────────────────────────────
+    from shield import jsbridge
+    languages  = detect_languages(str(path))
+    has_python = 'python' in languages
+
+    if jsbridge.wants_js(languages):
+        section("JAVASCRIPT / TYPESCRIPT — shield-js")
+        js_failed = False
+        if not jsbridge.find_shield_js():
+            warning("shield-js not found — JS/TS files were not fixed")
+            info("Install: run `npm link` inside the shield-js folder")
+            js_failed = True
+        else:
+            try:
+                js_out = str(Path(args.output) / 'js_fixed')
+                js = jsbridge.fix_js(args.path, js_out, inplace=args.inplace,
+                                     exclude=[args.output])
+                for w in js['written']:
+                    rules = ', '.join(f"{r} x{n}" for r, n in w['fixes'].items())
+                    success(f"{w['file']} — {rules}")
+                for u in js['unfixable']:
+                    error(f"UNFIXABLE {u['file']}: {u['reason']}")
+                for e in js['errors']:
+                    error(f"Could not parse {e['file']}: {e['message']}")
+                info(f"Fixed: {js['fixed']}   Remaining High: {js['after']['high']}")
+                info(f"Before: Grade {js['before']['grade']}   After: Grade {js['after']['grade']}")
+                for f in js['remaining']:
+                    warning(f"[{f['ruleId']}] {f['file']}:{f['line']} — {f['message']}")
+                if js['written'] and not args.inplace:
+                    info(f"Fixed copies saved to: {js_out}")
+                js_failed = bool(js['after']['high'] or js['unfixable'] or js['errors'])
+            except jsbridge.JsBridgeError as e:
+                error(f"shield-js failed: {e}")
+                js_failed = True
+        if not has_python:
+            sys.exit(1 if js_failed else 0)
         print()
+    elif not has_python:
+        error("No Python or JavaScript/TypeScript files found.")
+        info("shield fix supports Python and JS/TS. Use 'shield scan' or 'shield audit' for other languages.")
+        sys.exit(1)
+
+    other = [l for l in languages if l != 'python' and l not in jsbridge.JS_LANGUAGES]
+    if other:
+        warning(f"Auto-fix is not available for: {', '.join(other)} (scan and audit only)")
+        print()
+
+    if 'python' not in languages:
+        success("JavaScript/TypeScript fix complete")
+        return
 
     # If single file — wrap in temp folder
     if path.is_file():
@@ -578,7 +728,7 @@ def cmd_compare(args):
 
 def cmd_version(args):
     print_banner()
-    info("SHIELD Security v1.0.5")
+    info("SHIELD Security v1.0.6")
     info("Author: Ali Yasin Idrees")
     info("GitHub: github.com/Aliidrees1234/llm-security-research")
     info("Research: LLM Security in Web Applications — 2026")
@@ -948,6 +1098,20 @@ def cmd_audit(args):
         except Exception as e:
             warning(f"{lang.upper()} scan failed: {e}")
 
+    # ── JavaScript / TypeScript — shield-js ────────────────────────────────────
+    from shield import jsbridge
+    if jsbridge.wants_js(languages):
+        if jsbridge.find_shield_js():
+            try:
+                js = jsbridge.scan_js(str(path))
+                added = jsbridge.merge_findings(result, js['findings'])
+                info(f"shield-js: {len(added)} additional finding(s) in {js['files']} JS/TS file(s)")
+            except jsbridge.JsBridgeError as e:
+                warning(f"shield-js failed: {e}")
+        else:
+            warning("shield-js not found — JS/TS-specific rules skipped")
+        
+
     elapsed = round(__import__('time').time() - t0, 2)
     info(f"Scan completed in {elapsed}s")
     info(f"High: {len(result.high)}  Medium: {len(result.medium)}  Low: {len(result.low)}")
@@ -1007,7 +1171,7 @@ def cmd_doctor(args):
 
     # ── Semgrep ────────────────────────────────────────────────────────────
     try:
-        res = subprocess.run(  # nosec B603
+        res = subprocess.run(  # nosec B603 B607 — semgrep is a known installed binary
             ['semgrep', '--version'],
             capture_output=True, text=True
         )
@@ -1041,6 +1205,18 @@ def cmd_doctor(args):
     except ImportError:
         warning("colorama — NOT FOUND (no colored output)")
         info("    Fix: pip install colorama")
+
+    # ── shield-js (JavaScript / TypeScript engine) ─────────────────────────────
+    import shutil
+    from shield import jsbridge
+    if not shutil.which('node'):
+        warning("Node.js — NOT FOUND (JS/TS auto-fix disabled)")
+        info("    Fix: install Node.js 18+ from nodejs.org")
+    elif jsbridge.find_shield_js():
+        success("shield-js — found (JS/TS scanning and auto-fix enabled)")
+    else:
+        warning("shield-js — NOT FOUND (JS/TS auto-fix disabled)")
+        info("    Fix: run `npm link` inside the shield-js folder")
 
     # ── SHIELD rules ───────────────────────────────────────────────────────
     try:

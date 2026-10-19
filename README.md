@@ -5,8 +5,11 @@
 
 [![SHIELD Security Gate](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml/badge.svg)](https://github.com/Aliidrees1234/llm-security-research/actions/workflows/shield_layer4_gate.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-blue)
-![Version](https://img.shields.io/badge/SHIELD-v1.0.5-black)
-![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)
+![Version](https://img.shields.io/badge/SHIELD-v1.0.6-black)
+![Tests](https://img.shields.io/badge/tests-120%20passing-brightgreen)
+
+
+
 
 ---
 
@@ -164,12 +167,13 @@ shield monitor --show-rules
 # Show shield dashboard
 shield dashboard
 
+|`shield scan` / `fix` / `audit` | Python via Bandit and AST fixes; JavaScript/TypeScript via [shield-js](https://github.com/Aliidrees1234/shield-js) |
+
 ## Security Auditing
 # Generate Audit
 shield audit ./project --company "Acme BV"` | Generate professional client audit report 
 
 SHIELD can generate professional audit reports suitable for client engagements.
-
 
 ```bash
 # Basic audit
@@ -195,19 +199,23 @@ The audit report includes:
 
 Suitable for delivering to clients as a standalone confidential document.
 
+### JavaScript / TypeScript
+Install [shield-js](https://github.com/Aliidrees1234/shield-js) (`npm link`) and SHIELD scans and auto-fixes JS/TS files alongside Python (hardcoded secrets, debug mode; eval and SQL injection are flagged). Run `shield doctor` to confirm it's detected.
+
+
 > **Language Support:**
 > - `shield fix` — Python only (AST-based auto-remediation)
 > - `shield scan` — 8 languages (Python, JS, TS, C#, Java, PHP, Go, Ruby)
 > - `shield audit` — 8 languages (professional report for any language)
 >
-> Multi-language auto-fix is planned for a future release.
+> Multi-language auto-fix
 
 ## Run Tests
 
 ```bash
 pip install pytest
 pytest tests/ -v
-# 99 tests passing
+# 120 tests passing
 ```
 -----
 
